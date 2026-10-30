@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2026-10-30
+
+### Task: Keyword Intelligence, Ranking Landing URLs & Black Screen Bug Fix
+- **Release APK**: [RankScope-v1.0.2.apk](https://github.com/arybishal/Rankscope/releases/download/v1.0.2/RankScope-v1.0.2.apk)
+- **SHA-256 Checksum**: `28A18886E865A4FC11F407972CD9BD9AD92D5C5B10372C21202D6D60B4C3FC57`
+
+### Fixed
+- **Keyword Creation Black Screen Bug**: Resolved critical navigation bug where saving a keyword dismissed the root router branch rather than the dialog route's context. Isolated dialog contexts to ensure dashboard route remains mounted and newly created keywords render immediately without app restart.
+- **Form Layout Flex Overflow**: Fixed 26px horizontal render flex overflow on advanced settings button across narrow Android viewports by applying `Expanded` and flex layout constraints.
+- **SQLite Double-Quote Identifiers**: Corrected duplicate keyword queries to avoid SQL identifier misinterpretations for empty strings in SQLite.
+
+### Added
+- **Multi-Search Engine Separation**: Independent position tracking, movement deltas, and historical observations for Google and Bing.
+- **Strict Rank Display Standard**: Unambiguous separation between exact SERP positions (`#1` to `#100`), confirmed absent (`0`), and unranked/pending (`—`).
+- **Detected Ranking Landing URLs**: Automatic extraction and storage of specific ranking URLs with one-tap clipboard copy action.
+- **Keyword Cannibalization Detection**: Automatic identification of `multiple_urls` and `url_switching` across observation checks with visual warning banners and affected URL lists.
+- **Keyword Lifecycle Transitions**: State tracking for `new` (first-time ranked), `lost` (dropped to position 0), and `recovered` (re-entered top 100) status events.
+- **Keyword Details Screen**: Comprehensive view with 7D/30D/90D/All timeframe filtering, search engine comparison breakdown, detected ranking URLs, and full observation history timeline.
+- **Dashboard SEO KPIs Grid**: 6 high-level metric cards for Tracked queries, Ranking (1-100), Not Ranking (0), Improved, Declined, and Cannibalization alerts.
+- **Database Schema Migration 003**: Added `rank_observations` table with performance indexes on `keyword_id`, `search_engine`, `ranking_url`, and `recorded_at DESC`.
+- **Encrypted Backup & CSV Export Expansion**: Enriched `.rankscope` encrypted snapshots and RFC 4180 CSV exports with complete rank observation records and landing URLs.
+- **Automated Regression Test Suites**: Added `keyword_black_screen_regression_test.dart` and `keyword_intelligence_test.dart` bringing test suite to 74 passing tests.
+
+---
+
 ## [1.0.1] - 2026-10-30
 
 ### Task 001: Data Persistence, Authenticated Encrypted Backups & Log Management Center

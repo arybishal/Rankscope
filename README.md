@@ -2,14 +2,14 @@
 
 > **Zero-Cost, Privacy-First SEO Rank & Search Performance Tracker for Android**
 
-[![Release](https://img.shields.io/github/v/release/arybishal/Rankscope?style=flat-square&color=0F172A)](https://github.com/arybishal/Rankscope/releases/tag/v1.0.1)
+[![Release](https://img.shields.io/github/v/release/arybishal/Rankscope?style=flat-square&color=0F172A)](https://github.com/arybishal/Rankscope/releases/tag/v1.0.2)
 [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-blue?style=flat-square)](https://github.com/arybishal/Rankscope)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](https://github.com/arybishal/Rankscope)
 [![Budget](https://img.shields.io/badge/Budget-%240%20Zero--Cost-brightgreen?style=flat-square)](https://github.com/arybishal/Rankscope)
 
 RankScope is an open-source, offline-first Android application built with Flutter that empowers website owners, digital marketers, and SEO professionals to track search keyword positions, monitor competitor performance, and analyze organic visibility across Google and Bing—with **strictly $0 spend**, **zero backend infrastructure**, and **100% on-device data sovereignty**.
 
-📥 **[Download Latest APK (v1.0.1)](https://github.com/arybishal/Rankscope/releases/download/v1.0.1/RankScope-v1.0.1.apk)** • [GitHub Release Notes](https://github.com/arybishal/Rankscope/releases/tag/v1.0.1)
+📥 **[Download Latest APK (v1.0.2)](https://github.com/arybishal/Rankscope/releases/download/v1.0.2/RankScope-v1.0.2.apk)** • [GitHub Release Notes](https://github.com/arybishal/Rankscope/releases/tag/v1.0.2)
 
 ---
 

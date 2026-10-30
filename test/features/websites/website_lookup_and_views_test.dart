@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rankscope/features/dashboard/presentation/views/dashboard_view.dart';
-import 'package:rankscope/features/keywords/domain/entities/keyword.dart';
-import 'package:rankscope/features/keywords/domain/repositories/keywords_repository.dart';
 import 'package:rankscope/features/keywords/presentation/controllers/keywords_controller.dart';
 import 'package:rankscope/features/manual_tracking/presentation/views/manual_tracking_view.dart';
 import 'package:rankscope/features/search_console/presentation/views/search_console_view.dart';
@@ -36,11 +34,24 @@ class _FakeKeywordsRepository implements KeywordsRepository {
   Future<List<Keyword>> getKeywordsByWebsite(
     int websiteId, {
     bool? isActive,
+    String? searchEngine,
     String? tag,
   }) async => [];
 
   @override
   Future<Keyword?> getKeywordById(int id) async => null;
+
+  @override
+  Future<Keyword?> findDuplicateKeyword({
+    required int websiteId,
+    required String keywordText,
+    required String searchEngine,
+    required String targetCountry,
+    String? targetCity,
+    String language = 'en',
+    String device = 'Desktop',
+    int? excludeId,
+  }) async => null;
 
   @override
   Future<Keyword> addKeyword(Keyword keyword) async => keyword;
@@ -53,10 +64,30 @@ class _FakeKeywordsRepository implements KeywordsRepository {
   Future<void> updateKeyword(Keyword keyword) async {}
 
   @override
-  Future<void> updateKeywordPosition(int keywordId, int newPosition) async {}
+  Future<void> toggleActiveStatus(int keywordId, bool isActive) async {}
 
   @override
   Future<void> deleteKeyword(int id) async {}
+
+  @override
+  Future<void> bulkDeleteKeywords(List<int> ids) async {}
+
+  @override
+  Future<RankObservation> recordObservation(
+    RankObservation observation,
+  ) async => observation;
+
+  @override
+  Future<List<RankObservation>> getObservationsForKeyword(
+    int keywordId, {
+    String? searchEngine,
+    int limit = 100,
+  }) async => [];
+
+  @override
+  Future<List<Map<String, dynamic>>> getCannibalizationAlerts(
+    int websiteId,
+  ) async => [];
 }
 
 void main() {

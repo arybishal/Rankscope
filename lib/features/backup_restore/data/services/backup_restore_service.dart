@@ -60,6 +60,9 @@ class BackupRestoreService {
     final List<Map<String, dynamic>> manualRecords = await db.query(
       DatabaseConstants.tableManualRankRecords,
     );
+    final List<Map<String, dynamic>> rankObservations = await db.query(
+      DatabaseConstants.tableRankObservations,
+    );
     final List<Map<String, dynamic>> gscRecords = await db.query(
       DatabaseConstants.tableGscSearchAnalytics,
     );
@@ -96,6 +99,7 @@ class BackupRestoreService {
         'websites': websites,
         'keywords': keywords,
         'manual_rank_records': manualRecords,
+        'rank_observations': rankObservations,
         'gsc_search_analytics': gscRecords,
         'bing_search_analytics': bingRecords,
         'competitor_keyword_links': compLinks,
@@ -288,6 +292,7 @@ class BackupRestoreService {
         await txn.delete(DatabaseConstants.tableReportsHistory);
         await txn.delete(DatabaseConstants.tableGscSearchAnalytics);
         await txn.delete(DatabaseConstants.tableBingSearchAnalytics);
+        await txn.delete(DatabaseConstants.tableRankObservations);
         await txn.delete(DatabaseConstants.tableManualRankRecords);
         await txn.delete(DatabaseConstants.tableKeywords);
         await txn.delete(DatabaseConstants.tableWebsites);
@@ -311,6 +316,13 @@ class BackupRestoreService {
             .cast<Map<String, dynamic>>();
         for (final row in manualRecords) {
           await txn.insert(DatabaseConstants.tableManualRankRecords, row);
+        }
+
+        // Repopulate rank observations
+        final rankObs = (data['rank_observations'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
+        for (final row in rankObs) {
+          await txn.insert(DatabaseConstants.tableRankObservations, row);
         }
 
         // Repopulate GSC records
@@ -509,6 +521,27 @@ class BackupRestoreService {
           await txn.insert(DatabaseConstants.tableManualRankRecords, insertMap);
           rankRecordsAdded++;
         }
+      }
+
+      // 3b. Merge Rank Observations
+      final rankObsRecords = (data['rank_observations'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
+      for (final obsRow in rankObsRecords) {
+        final oldSiteId = obsRow['website_id'] as int;
+        final oldKwId = obsRow['keyword_id'] as int;
+        final mappedSiteId = websiteIdMap[oldSiteId];
+        final mappedKwId = keywordIdMap[oldKwId];
+        if (mappedSiteId == null || mappedKwId == null) continue;
+
+        final insertMap = Map<String, dynamic>.from(obsRow)
+          ..remove('id')
+          ..['website_id'] = mappedSiteId
+          ..['keyword_id'] = mappedKwId;
+        await txn.insert(
+          DatabaseConstants.tableRankObservations,
+          insertMap,
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
       }
 
       // 4. Merge Search Analytics (GSC & Bing)

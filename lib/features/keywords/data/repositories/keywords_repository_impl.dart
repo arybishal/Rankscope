@@ -1,5 +1,4 @@
 import '../../../../core/errors/failures.dart';
-import '../../domain/entities/keyword.dart';
 import '../../domain/repositories/keywords_repository.dart';
 import '../datasources/local_keywords_datasource.dart';
 
@@ -14,12 +13,14 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
   Future<List<Keyword>> getKeywordsByWebsite(
     int websiteId, {
     bool? isActive,
+    String? searchEngine,
     String? tag,
   }) async {
     try {
       return await _localDatasource.getKeywordsByWebsite(
         websiteId,
         isActive: isActive,
+        searchEngine: searchEngine,
         tag: tag,
       );
     } catch (e) {
@@ -39,9 +40,52 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
   }
 
   @override
+  Future<Keyword?> findDuplicateKeyword({
+    required int websiteId,
+    required String keywordText,
+    required String searchEngine,
+    required String targetCountry,
+    String? targetCity,
+    String language = 'en',
+    String device = 'Desktop',
+    int? excludeId,
+  }) async {
+    try {
+      return await _localDatasource.findDuplicateKeyword(
+        websiteId: websiteId,
+        keywordText: keywordText,
+        searchEngine: searchEngine,
+        targetCountry: targetCountry,
+        targetCity: targetCity,
+        language: language,
+        device: device,
+        excludeId: excludeId,
+      );
+    } catch (e) {
+      throw DatabaseFailure('Failed to check duplicate keyword: $e');
+    }
+  }
+
+  @override
   Future<Keyword> addKeyword(Keyword keyword) async {
     try {
+      final duplicate = await _localDatasource.findDuplicateKeyword(
+        websiteId: keyword.websiteId,
+        keywordText: keyword.keywordText,
+        searchEngine: keyword.searchEngine,
+        targetCountry: keyword.targetCountry,
+        targetCity: keyword.targetCity,
+        language: keyword.language,
+        device: keyword.device,
+      );
+      if (duplicate != null) {
+        throw const ValidationFailure(
+          'This keyword is already being tracked with this search engine and location.',
+        );
+      }
       return await _localDatasource.insertKeyword(keyword);
+    } on Failure {
+      rethrow;
     } catch (e) {
       throw DatabaseFailure('Failed to insert keyword: $e');
     }
@@ -59,18 +103,35 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
   @override
   Future<void> updateKeyword(Keyword keyword) async {
     try {
+      final duplicate = await _localDatasource.findDuplicateKeyword(
+        websiteId: keyword.websiteId,
+        keywordText: keyword.keywordText,
+        searchEngine: keyword.searchEngine,
+        targetCountry: keyword.targetCountry,
+        targetCity: keyword.targetCity,
+        language: keyword.language,
+        device: keyword.device,
+        excludeId: keyword.id,
+      );
+      if (duplicate != null) {
+        throw const ValidationFailure(
+          'Another keyword with this exact configuration already exists.',
+        );
+      }
       await _localDatasource.updateKeyword(keyword);
+    } on Failure {
+      rethrow;
     } catch (e) {
       throw DatabaseFailure('Failed to update keyword #${keyword.id}: $e');
     }
   }
 
   @override
-  Future<void> updateKeywordPosition(int keywordId, int newPosition) async {
+  Future<void> toggleActiveStatus(int keywordId, bool isActive) async {
     try {
-      await _localDatasource.updateKeywordPosition(keywordId, newPosition);
+      await _localDatasource.toggleActiveStatus(keywordId, isActive);
     } catch (e) {
-      throw DatabaseFailure('Failed to update keyword position: $e');
+      throw DatabaseFailure('Failed to toggle keyword status: $e');
     }
   }
 
@@ -80,6 +141,52 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
       await _localDatasource.deleteKeyword(id);
     } catch (e) {
       throw DatabaseFailure('Failed to delete keyword #$id: $e');
+    }
+  }
+
+  @override
+  Future<void> bulkDeleteKeywords(List<int> ids) async {
+    try {
+      await _localDatasource.bulkDeleteKeywords(ids);
+    } catch (e) {
+      throw DatabaseFailure('Failed to bulk delete keywords: $e');
+    }
+  }
+
+  @override
+  Future<RankObservation> recordObservation(RankObservation observation) async {
+    try {
+      return await _localDatasource.recordObservation(observation);
+    } catch (e) {
+      throw DatabaseFailure('Failed to record rank observation: $e');
+    }
+  }
+
+  @override
+  Future<List<RankObservation>> getObservationsForKeyword(
+    int keywordId, {
+    String? searchEngine,
+    int limit = 100,
+  }) async {
+    try {
+      return await _localDatasource.getObservationsForKeyword(
+        keywordId,
+        searchEngine: searchEngine,
+        limit: limit,
+      );
+    } catch (e) {
+      throw DatabaseFailure('Failed to fetch rank observations: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getCannibalizationAlerts(
+    int websiteId,
+  ) async {
+    try {
+      return await _localDatasource.getCannibalizationAlerts(websiteId);
+    } catch (e) {
+      throw DatabaseFailure('Failed to fetch cannibalization alerts: $e');
     }
   }
 }

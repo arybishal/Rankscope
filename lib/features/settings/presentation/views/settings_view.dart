@@ -588,8 +588,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 _SettingsNavCard(
                   icon: Icons.language_outlined,
                   title: 'Manage Tracked Websites',
-                  description:
-                      'Add new websites, configure competitors, view Bing verification status, and switch active properties.',
+                  description: 'Add new websites, configure competitors, view Bing verification status, and switch active properties.',
                   onTap: () => context.push('/websites'),
                 ),
                 const SizedBox(height: AppSpacing.lg),

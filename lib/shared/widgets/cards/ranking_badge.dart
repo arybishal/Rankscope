@@ -9,17 +9,38 @@ class RankingBadge extends StatelessWidget {
   final int? position;
   final int? delta; // Positive = gained rank (e.g. +3), Negative = dropped rank
   final bool showDelta;
+  final String? statusLabel; // e.g. 'Pending', 'Paused', 'Error'
 
   const RankingBadge({
     super.key,
     required this.position,
     this.delta,
     this.showDelta = true,
+    this.statusLabel,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (position == null || position! <= 0) {
+    if (statusLabel != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceTertiary,
+          borderRadius: BorderRadius.circular(AppSpacing.badgeRadius),
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
+        child: Text(
+          statusLabel!,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      );
+    }
+
+    if (position == null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
         decoration: BoxDecoration(
@@ -28,6 +49,30 @@ class RankingBadge extends StatelessWidget {
           border: Border.all(color: AppColors.borderSubtle),
         ),
         child: const Text('—', style: AppTextStyles.labelSmall),
+      );
+    }
+
+    if (position == 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(AppSpacing.badgeRadius),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '0',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
       );
     }
 

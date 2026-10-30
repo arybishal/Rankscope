@@ -25,15 +25,22 @@ class CsvReportGenerator {
     // Column headers
     rows.add([
       'Keyword',
-      'Latest Position',
+      'Search Engine',
+      'Current Position',
       'Previous Position',
       'Delta',
-      'Target Country',
-      'Target City',
+      'Google Position',
+      'Bing Position',
+      'Ranking URL',
       'Target URL',
-      'Tags',
-      'Status',
-      'Last Audited',
+      'Country',
+      'City',
+      'Language',
+      'Device',
+      'Tracking Status',
+      'Cannibalization Alert',
+      'Status Event',
+      'Last Checked',
     ]);
 
     // Data rows
@@ -44,14 +51,27 @@ class CsvReportGenerator {
 
       rows.add([
         kw.keywordText,
-        kw.latestPosition ?? 'Unranked',
+        kw.searchEngine,
+        kw.latestPosition == null
+            ? 'Pending'
+            : (kw.latestPosition == 0 ? 'Not Ranking (0)' : kw.latestPosition),
         kw.previousPosition ?? '—',
         deltaStr,
+        kw.googlePosition == null
+            ? '—'
+            : (kw.googlePosition == 0 ? 'Not Ranking (0)' : kw.googlePosition),
+        kw.bingPosition == null
+            ? '—'
+            : (kw.bingPosition == 0 ? 'Not Ranking (0)' : kw.bingPosition),
+        kw.rankingUrl ?? '—',
+        kw.targetUrl ?? '—',
         kw.targetCountry,
         kw.targetCity ?? '—',
-        kw.targetUrl ?? '—',
-        kw.tags.join('; '),
+        kw.language,
+        kw.device,
         kw.isActive ? 'Active' : 'Paused',
+        kw.cannibalizationStatus,
+        kw.statusEvent,
         kw.lastCheckedAt?.toIso8601String() ?? 'Never',
       ]);
     }

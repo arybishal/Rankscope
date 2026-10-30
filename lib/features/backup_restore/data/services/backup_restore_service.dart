@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+
 import 'package:cryptography/cryptography.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' hide DatabaseException;
+
 import '../../../../core/constants/database_constants.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/errors/exceptions.dart';
@@ -28,8 +30,8 @@ class BackupRestoreService {
   BackupRestoreService({
     AppDatabase? dbManager,
     SecureStorageService? secureStorage,
-  })  : _dbManager = dbManager ?? AppDatabase.instance,
-        _secureStorage = secureStorage ?? SecureStorageService();
+  }) : _dbManager = dbManager ?? AppDatabase.instance,
+       _secureStorage = secureStorage ?? SecureStorageService();
 
   static const int _pbkdf2Iterations = 100000;
   static const int _saltLength = 16;
@@ -49,16 +51,31 @@ class BackupRestoreService {
     final db = await _dbManager.database;
 
     // 2. Query all tables
-    final List<Map<String, dynamic>> websites = await db.query(DatabaseConstants.tableWebsites);
-    final List<Map<String, dynamic>> keywords = await db.query(DatabaseConstants.tableKeywords);
-    final List<Map<String, dynamic>> manualRecords = await db.query(DatabaseConstants.tableManualRankRecords);
-    final List<Map<String, dynamic>> gscRecords = await db.query(DatabaseConstants.tableGscSearchAnalytics);
-    final List<Map<String, dynamic>> bingRecords = await db.query(DatabaseConstants.tableBingSearchAnalytics);
-    final List<Map<String, dynamic>> compLinks = await db.query(DatabaseConstants.tableCompetitorKeywordLinks);
-    final List<Map<String, dynamic>> reportsHistory = await db.query(DatabaseConstants.tableReportsHistory);
+    final List<Map<String, dynamic>> websites = await db.query(
+      DatabaseConstants.tableWebsites,
+    );
+    final List<Map<String, dynamic>> keywords = await db.query(
+      DatabaseConstants.tableKeywords,
+    );
+    final List<Map<String, dynamic>> manualRecords = await db.query(
+      DatabaseConstants.tableManualRankRecords,
+    );
+    final List<Map<String, dynamic>> gscRecords = await db.query(
+      DatabaseConstants.tableGscSearchAnalytics,
+    );
+    final List<Map<String, dynamic>> bingRecords = await db.query(
+      DatabaseConstants.tableBingSearchAnalytics,
+    );
+    final List<Map<String, dynamic>> compLinks = await db.query(
+      DatabaseConstants.tableCompetitorKeywordLinks,
+    );
+    final List<Map<String, dynamic>> reportsHistory = await db.query(
+      DatabaseConstants.tableReportsHistory,
+    );
 
     // 3. Extract secure hardware credentials
-    final Map<String, String> credentials = await _secureStorage.getAllCredentials();
+    final Map<String, String> credentials = await _secureStorage
+        .getAllCredentials();
 
     // 4. Construct complete backup payload
     final now = DateTime.now();
@@ -87,12 +104,18 @@ class BackupRestoreService {
       },
     };
 
-    final Uint8List plaintextBytes = Uint8List.fromList(utf8.encode(jsonEncode(payload)));
+    final Uint8List plaintextBytes = Uint8List.fromList(
+      utf8.encode(jsonEncode(payload)),
+    );
 
     // 5. Generate unique cryptographic salt & nonce
     final random = Random.secure();
-    final Uint8List salt = Uint8List.fromList(List<int>.generate(_saltLength, (_) => random.nextInt(256)));
-    final Uint8List nonce = Uint8List.fromList(List<int>.generate(_nonceLength, (_) => random.nextInt(256)));
+    final Uint8List salt = Uint8List.fromList(
+      List<int>.generate(_saltLength, (_) => random.nextInt(256)),
+    );
+    final Uint8List nonce = Uint8List.fromList(
+      List<int>.generate(_nonceLength, (_) => random.nextInt(256)),
+    );
 
     // 6. Derive key using PBKDF2
     final pbkdf2 = Pbkdf2(
@@ -128,12 +151,19 @@ class BackupRestoreService {
     };
 
     // 9. Write to file
-    final String baseDir = destinationDirPath ?? (await getApplicationDocumentsDirectory()).path;
+    final String baseDir =
+        destinationDirPath ?? (await getApplicationDocumentsDirectory()).path;
     final String timestampStr = DateFormat('yyyy-MM-dd_HH-mm').format(now);
-    final File backupFile = File(join(baseDir, 'RankScope_Backup_$timestampStr.rankscope'));
+    final File backupFile = File(
+      join(baseDir, 'RankScope_Backup_$timestampStr.rankscope'),
+    );
 
     await backupFile.writeAsString(jsonEncode(envelope), flush: true);
-    await AppLogger.instance.info('Backup', 'backup_exported', 'Encrypted backup exported: ${backupFile.path}');
+    await AppLogger.instance.info(
+      'Backup',
+      'backup_exported',
+      'Encrypted backup exported: ${backupFile.path}',
+    );
     return backupFile;
   }
 
@@ -152,18 +182,23 @@ class BackupRestoreService {
     try {
       envelope = jsonDecode(content) as Map<String, dynamic>;
     } catch (_) {
-      throw const ValidationException('Invalid backup file: not valid JSON format.');
+      throw const ValidationException(
+        'Invalid backup file: not valid JSON format.',
+      );
     }
 
     if (envelope['format'] != 'rankscope_encrypted_backup') {
-      throw const ValidationException('Invalid backup archive: unrecognized format.');
+      throw const ValidationException(
+        'Invalid backup archive: unrecognized format.',
+      );
     }
 
     final salt = base64Decode(envelope['salt_base64'] as String);
     final nonce = base64Decode(envelope['nonce_base64'] as String);
     final macBytes = base64Decode(envelope['mac_base64'] as String);
     final cipherText = base64Decode(envelope['ciphertext_base64'] as String);
-    final iterations = (envelope['kdf_iterations'] as int?) ?? _pbkdf2Iterations;
+    final iterations =
+        (envelope['kdf_iterations'] as int?) ?? _pbkdf2Iterations;
 
     // Derive key
     final pbkdf2 = Pbkdf2(
@@ -181,24 +216,25 @@ class BackupRestoreService {
     List<int> decryptedBytes;
     try {
       decryptedBytes = await algorithm.decrypt(
-        SecretBox(
-          cipherText,
-          nonce: nonce,
-          mac: Mac(macBytes),
-        ),
+        SecretBox(cipherText, nonce: nonce, mac: Mac(macBytes)),
         secretKey: secretKey,
       );
     } on SecretBoxAuthenticationError {
-      throw const ValidationException('Incorrect backup password or corrupted backup file.');
+      throw const ValidationException(
+        'Incorrect backup password or corrupted backup file.',
+      );
     } catch (e) {
       throw ValidationException('Failed to decrypt backup: $e');
     }
 
     final String payloadJson = utf8.decode(decryptedBytes);
-    final Map<String, dynamic> payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+    final Map<String, dynamic> payload =
+        jsonDecode(payloadJson) as Map<String, dynamic>;
 
     if (payload['app'] != 'RankScope') {
-      throw const ValidationException('Invalid backup payload: not a RankScope archive.');
+      throw const ValidationException(
+        'Invalid backup payload: not a RankScope archive.',
+      );
     }
 
     final data = payload['data'] as Map<String, dynamic>? ?? {};
@@ -214,7 +250,8 @@ class BackupRestoreService {
       'version': payload['version'] ?? '1.0.0',
       'websites_count': websites.length,
       'keywords_count': keywords.length,
-      'ranking_records_count': manualRecords.length + gscRecords.length + bingRecords.length,
+      'ranking_records_count':
+          manualRecords.length + gscRecords.length + bingRecords.length,
       'integrations_count': credentials.length,
       'payload': payload,
     };
@@ -225,14 +262,18 @@ class BackupRestoreService {
   Future<void> performFullRestore(Map<String, dynamic> payload) async {
     final data = payload['data'] as Map<String, dynamic>?;
     if (data == null) {
-      throw const ValidationException('Malformed backup payload: missing data node.');
+      throw const ValidationException(
+        'Malformed backup payload: missing data node.',
+      );
     }
 
     // 1. Create automatic recovery backup of current database file
     await _dbManager.walCheckpoint();
     final dbPath = await getDatabasesPath();
     final liveFile = File(join(dbPath, DatabaseConstants.databaseName));
-    final recoveryFile = File(join(dbPath, '${DatabaseConstants.databaseName}.recovery_snapshot'));
+    final recoveryFile = File(
+      join(dbPath, '${DatabaseConstants.databaseName}.recovery_snapshot'),
+    );
 
     if (await liveFile.exists()) {
       await liveFile.copy(recoveryFile.path);
@@ -252,43 +293,50 @@ class BackupRestoreService {
         await txn.delete(DatabaseConstants.tableWebsites);
 
         // Repopulate websites
-        final websites = (data['websites'] as List? ?? []).cast<Map<String, dynamic>>();
+        final websites = (data['websites'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
         for (final row in websites) {
           await txn.insert(DatabaseConstants.tableWebsites, row);
         }
 
         // Repopulate keywords
-        final keywords = (data['keywords'] as List? ?? []).cast<Map<String, dynamic>>();
+        final keywords = (data['keywords'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
         for (final row in keywords) {
           await txn.insert(DatabaseConstants.tableKeywords, row);
         }
 
         // Repopulate manual rank records
-        final manualRecords = (data['manual_rank_records'] as List? ?? []).cast<Map<String, dynamic>>();
+        final manualRecords = (data['manual_rank_records'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
         for (final row in manualRecords) {
           await txn.insert(DatabaseConstants.tableManualRankRecords, row);
         }
 
         // Repopulate GSC records
-        final gscRecords = (data['gsc_search_analytics'] as List? ?? []).cast<Map<String, dynamic>>();
+        final gscRecords = (data['gsc_search_analytics'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
         for (final row in gscRecords) {
           await txn.insert(DatabaseConstants.tableGscSearchAnalytics, row);
         }
 
         // Repopulate Bing records
-        final bingRecords = (data['bing_search_analytics'] as List? ?? []).cast<Map<String, dynamic>>();
+        final bingRecords = (data['bing_search_analytics'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
         for (final row in bingRecords) {
           await txn.insert(DatabaseConstants.tableBingSearchAnalytics, row);
         }
 
         // Repopulate competitor keyword links
-        final compLinks = (data['competitor_keyword_links'] as List? ?? []).cast<Map<String, dynamic>>();
+        final compLinks = (data['competitor_keyword_links'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
         for (final row in compLinks) {
           await txn.insert(DatabaseConstants.tableCompetitorKeywordLinks, row);
         }
 
         // Repopulate reports history
-        final reports = (data['reports_history'] as List? ?? []).cast<Map<String, dynamic>>();
+        final reports = (data['reports_history'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
         for (final row in reports) {
           await txn.insert(DatabaseConstants.tableReportsHistory, row);
         }
@@ -304,9 +352,19 @@ class BackupRestoreService {
       if (await recoveryFile.exists()) {
         await recoveryFile.delete();
       }
-      await AppLogger.instance.info('Backup', 'full_restore_success', 'Full database restore successfully completed');
+      await AppLogger.instance.info(
+        'Backup',
+        'full_restore_success',
+        'Full database restore successfully completed',
+      );
     } catch (e, st) {
-      await AppLogger.instance.error('Backup', 'full_restore_failed', 'Full restore failed, initiated rollback', error: e, stackTrace: st);
+      await AppLogger.instance.error(
+        'Backup',
+        'full_restore_failed',
+        'Full restore failed, initiated rollback',
+        error: e,
+        stackTrace: st,
+      );
       // Transaction aborted or error encountered: restore from recovery file if present
       await _dbManager.close();
       if (await recoveryFile.exists()) {
@@ -314,16 +372,22 @@ class BackupRestoreService {
         await recoveryFile.delete();
       }
       await _dbManager.database;
-      throw DatabaseException('Full restore failed: $e. System automatically reverted to previous state.');
+      throw DatabaseException(
+        'Full restore failed: $e. System automatically reverted to previous state.',
+      );
     }
   }
 
   /// Mode B: Merge Import.
   /// Adds imported records without unnecessarily duplicating existing records, resolving IDs dynamically.
-  Future<Map<String, int>> performMergeImport(Map<String, dynamic> payload) async {
+  Future<Map<String, int>> performMergeImport(
+    Map<String, dynamic> payload,
+  ) async {
     final data = payload['data'] as Map<String, dynamic>?;
     if (data == null) {
-      throw const ValidationException('Malformed backup payload: missing data node.');
+      throw const ValidationException(
+        'Malformed backup payload: missing data node.',
+      );
     }
 
     final db = await _dbManager.database;
@@ -335,7 +399,8 @@ class BackupRestoreService {
       // 1. Merge Websites
       // Map: old backup website ID -> new/existing website ID
       final Map<int, int> websiteIdMap = {};
-      final websites = (data['websites'] as List? ?? []).cast<Map<String, dynamic>>();
+      final websites = (data['websites'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
 
       for (final siteRow in websites) {
         final oldId = siteRow['id'] as int;
@@ -354,7 +419,10 @@ class BackupRestoreService {
           websiteIdMap[oldId] = existing.first['id'] as int;
         } else {
           final insertMap = Map<String, dynamic>.from(siteRow)..remove('id');
-          final newId = await txn.insert(DatabaseConstants.tableWebsites, insertMap);
+          final newId = await txn.insert(
+            DatabaseConstants.tableWebsites,
+            insertMap,
+          );
           websiteIdMap[oldId] = newId;
           websitesAdded++;
         }
@@ -363,7 +431,8 @@ class BackupRestoreService {
       // 2. Merge Keywords
       // Map: old backup keyword ID -> new/existing keyword ID
       final Map<int, int> keywordIdMap = {};
-      final keywords = (data['keywords'] as List? ?? []).cast<Map<String, dynamic>>();
+      final keywords = (data['keywords'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
 
       for (final kwRow in keywords) {
         final oldKwId = kwRow['id'] as int;
@@ -377,7 +446,8 @@ class BackupRestoreService {
         final targetCity = kwRow['target_city'] as String?;
 
         // Check if keyword exists under mapped site
-        String where = 'website_id = ? AND keyword_text = ? AND target_country = ?';
+        String where =
+            'website_id = ? AND keyword_text = ? AND target_country = ?';
         List<dynamic> whereArgs = [mappedSiteId, keywordText, targetCountry];
 
         if (targetCity != null) {
@@ -400,14 +470,18 @@ class BackupRestoreService {
           final insertMap = Map<String, dynamic>.from(kwRow)
             ..remove('id')
             ..['website_id'] = mappedSiteId;
-          final newKwId = await txn.insert(DatabaseConstants.tableKeywords, insertMap);
+          final newKwId = await txn.insert(
+            DatabaseConstants.tableKeywords,
+            insertMap,
+          );
           keywordIdMap[oldKwId] = newKwId;
           keywordsAdded++;
         }
       }
 
       // 3. Merge Manual Rank Records
-      final manualRecords = (data['manual_rank_records'] as List? ?? []).cast<Map<String, dynamic>>();
+      final manualRecords = (data['manual_rank_records'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
       for (final recordRow in manualRecords) {
         final oldKwId = recordRow['keyword_id'] as int;
         final oldSiteId = recordRow['website_id'] as int;
@@ -438,7 +512,8 @@ class BackupRestoreService {
       }
 
       // 4. Merge Search Analytics (GSC & Bing)
-      final gscRecords = (data['gsc_search_analytics'] as List? ?? []).cast<Map<String, dynamic>>();
+      final gscRecords = (data['gsc_search_analytics'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
       for (final gscRow in gscRecords) {
         final oldSiteId = gscRow['website_id'] as int;
         final mappedSiteId = websiteIdMap[oldSiteId];
@@ -455,7 +530,8 @@ class BackupRestoreService {
         if (id > 0) rankRecordsAdded++;
       }
 
-      final bingRecords = (data['bing_search_analytics'] as List? ?? []).cast<Map<String, dynamic>>();
+      final bingRecords = (data['bing_search_analytics'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
       for (final bingRow in bingRecords) {
         final oldSiteId = bingRow['website_id'] as int;
         final mappedSiteId = websiteIdMap[oldSiteId];

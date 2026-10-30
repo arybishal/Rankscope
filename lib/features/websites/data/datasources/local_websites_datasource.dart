@@ -1,16 +1,17 @@
 import 'package:sqflite/sqflite.dart';
+
 import '../../../../core/constants/database_constants.dart';
 import '../../../../core/database/app_database.dart';
-import '../models/website_model.dart';
+import '../../domain/entities/website.dart';
 
 /// Direct SQLite data source for website entities.
 class LocalWebsitesDatasource {
   final AppDatabase _dbManager;
 
   LocalWebsitesDatasource({AppDatabase? dbManager})
-      : _dbManager = dbManager ?? AppDatabase.instance;
+    : _dbManager = dbManager ?? AppDatabase.instance;
 
-  Future<List<WebsiteModel>> getWebsites({bool? isCompetitor}) async {
+  Future<List<Website>> getWebsites({bool? isCompetitor}) async {
     final db = await _dbManager.database;
     String? where;
     List<dynamic>? whereArgs;
@@ -27,10 +28,10 @@ class LocalWebsitesDatasource {
       orderBy: 'updated_at DESC',
     );
 
-    return results.map((m) => WebsiteModel.fromMap(m)).toList();
+    return results.map((m) => Website.fromMap(m)).toList();
   }
 
-  Future<WebsiteModel?> getWebsiteById(int id) async {
+  Future<Website?> getWebsiteById(int id) async {
     final db = await _dbManager.database;
     final List<Map<String, dynamic>> results = await db.query(
       DatabaseConstants.tableWebsites,
@@ -40,10 +41,13 @@ class LocalWebsitesDatasource {
     );
 
     if (results.isEmpty) return null;
-    return WebsiteModel.fromMap(results.first);
+    return Website.fromMap(results.first);
   }
 
-  Future<WebsiteModel?> getWebsiteByDomain(String domain, {required bool isCompetitor}) async {
+  Future<Website?> getWebsiteByDomain(
+    String domain, {
+    required bool isCompetitor,
+  }) async {
     final db = await _dbManager.database;
     final List<Map<String, dynamic>> results = await db.query(
       DatabaseConstants.tableWebsites,
@@ -53,10 +57,10 @@ class LocalWebsitesDatasource {
     );
 
     if (results.isEmpty) return null;
-    return WebsiteModel.fromMap(results.first);
+    return Website.fromMap(results.first);
   }
 
-  Future<WebsiteModel> insertWebsite(WebsiteModel model) async {
+  Future<Website> insertWebsite(Website model) async {
     final db = await _dbManager.database;
     final id = await db.insert(
       DatabaseConstants.tableWebsites,
@@ -66,7 +70,7 @@ class LocalWebsitesDatasource {
     return model.copyWith(id: id);
   }
 
-  Future<int> updateWebsite(WebsiteModel model) async {
+  Future<int> updateWebsite(Website model) async {
     final db = await _dbManager.database;
     return await db.update(
       DatabaseConstants.tableWebsites,

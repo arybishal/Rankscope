@@ -3,12 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankscope/app.dart';
 
 void main() {
-  testWidgets('RankScopeApp mounts and renders navigation shell', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: RankScopeApp(),
-      ),
-    );
+  testWidgets('RankScopeApp mounts and renders navigation shell', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: RankScopeApp()));
 
     // Initial pump and settle
     await tester.pump();

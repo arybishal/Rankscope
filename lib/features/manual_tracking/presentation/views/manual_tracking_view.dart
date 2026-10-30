@@ -37,10 +37,13 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
         title: const Text('SERP Rank Audit', style: AppTextStyles.titleLarge),
       ),
       body: websitesState.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.accent)),
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.accent),
+        ),
         error: (err, _) => Center(child: Text('Error: $err')),
         data: (websites) {
-          if (websites.isEmpty) {
+          final activeWebsite = websites.findActive(selectedSiteId);
+          if (activeWebsite == null) {
             return const EmptyStateView(
               icon: Icons.track_changes,
               title: 'No Properties Available',
@@ -48,9 +51,9 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
             );
           }
 
-          final activeId = selectedSiteId ?? websites.first.id!;
-          final activeWebsite = websites.firstWhere((w) => w.id == activeId, orElse: () => websites.first);
-          final keywordsState = ref.watch(keywordsFamilyProvider(activeWebsite.id!));
+          final keywordsState = ref.watch(
+            keywordsFamilyProvider(activeWebsite.id!),
+          );
 
           return Column(
             children: [
@@ -59,7 +62,8 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: TextField(
                   controller: _searchController,
-                  onChanged: (val) => setState(() => _filter = val.trim().toLowerCase()),
+                  onChanged: (val) =>
+                      setState(() => _filter = val.trim().toLowerCase()),
                   decoration: InputDecoration(
                     hintText: 'Search keywords in ${activeWebsite.domain}...',
                     prefixIcon: const Icon(Icons.search, size: 20),
@@ -78,7 +82,9 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
 
               Expanded(
                 child: keywordsState.when(
-                  loading: () => const Center(child: CircularProgressIndicator(color: AppColors.accent)),
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(color: AppColors.accent),
+                  ),
                   error: (e, _) => Center(child: Text('Error: $e')),
                   data: (keywords) {
                     final filtered = keywords.where((k) {
@@ -94,16 +100,21 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
                     }
 
                     return ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                      ),
                       itemCount: filtered.length,
-                      separatorBuilder: (_, index) => const SizedBox(height: AppSpacing.sm),
+                      separatorBuilder: (_, index) =>
+                          const SizedBox(height: AppSpacing.sm),
                       itemBuilder: (context, index) {
                         final kw = filtered[index];
                         return Container(
                           padding: const EdgeInsets.all(AppSpacing.md),
                           decoration: BoxDecoration(
                             color: AppColors.surfacePrimary,
-                            borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.cardRadius,
+                            ),
                             border: Border.all(color: AppColors.borderSubtle),
                           ),
                           child: Row(
@@ -117,10 +128,15 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(kw.keywordText, style: AppTextStyles.labelLarge),
+                                    Text(
+                                      kw.keywordText,
+                                      style: AppTextStyles.labelLarge,
+                                    ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      kw.targetCity != null ? '${kw.targetCity}, ${kw.targetCountry}' : kw.targetCountry,
+                                      kw.targetCity != null
+                                          ? '${kw.targetCity}, ${kw.targetCountry}'
+                                          : kw.targetCountry,
                                       style: AppTextStyles.bodySmall,
                                     ),
                                   ],
@@ -130,7 +146,10 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.accent,
                                   foregroundColor: AppColors.surfacePrimary,
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
                                 ),
                                 onPressed: () async {
                                   final res = await showDialog<bool>(
@@ -141,7 +160,13 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
                                     ),
                                   );
                                   if (res == true) {
-                                    ref.read(keywordsFamilyProvider(activeWebsite.id!).notifier).loadKeywords();
+                                    ref
+                                        .read(
+                                          keywordsFamilyProvider(
+                                            activeWebsite.id!,
+                                          ).notifier,
+                                        )
+                                        .loadKeywords();
                                   }
                                 },
                                 child: const Text('Log Rank'),

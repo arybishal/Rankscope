@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
+
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,8 +15,12 @@ void main() {
     final algorithm = AesGcm.with256bits();
 
     final random = Random.secure();
-    final salt = Uint8List.fromList(List<int>.generate(16, (_) => random.nextInt(256)));
-    final nonce = Uint8List.fromList(List<int>.generate(12, (_) => random.nextInt(256)));
+    final salt = Uint8List.fromList(
+      List<int>.generate(16, (_) => random.nextInt(256)),
+    );
+    final nonce = Uint8List.fromList(
+      List<int>.generate(12, (_) => random.nextInt(256)),
+    );
 
     const password = 'SuperSecretPassword123!';
     final secretKey = await pbkdf2.deriveKey(
@@ -32,14 +37,13 @@ void main() {
 
     // Decrypt with correct password
     final decryptedBytes = await algorithm.decrypt(
-      SecretBox(
-        secretBox.cipherText,
-        nonce: nonce,
-        mac: secretBox.mac,
-      ),
+      SecretBox(secretBox.cipherText, nonce: nonce, mac: secretBox.mac),
       secretKey: secretKey,
     );
-    expect(utf8.decode(decryptedBytes), jsonEncode({'hello': 'world', 'count': 42}));
+    expect(
+      utf8.decode(decryptedBytes),
+      jsonEncode({'hello': 'world', 'count': 42}),
+    );
 
     // Decrypt with wrong password
     final wrongKey = await pbkdf2.deriveKey(
@@ -48,11 +52,7 @@ void main() {
     );
     expect(
       () => algorithm.decrypt(
-        SecretBox(
-          secretBox.cipherText,
-          nonce: nonce,
-          mac: secretBox.mac,
-        ),
+        SecretBox(secretBox.cipherText, nonce: nonce, mac: secretBox.mac),
         secretKey: wrongKey,
       ),
       throwsA(isA<SecretBoxAuthenticationError>()),

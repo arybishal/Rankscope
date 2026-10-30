@@ -5,7 +5,8 @@ class DatabaseException implements Exception {
   const DatabaseException(this.message, [this.cause]);
 
   @override
-  String toString() => 'DatabaseException: $message ${cause != null ? '($cause)' : ''}';
+  String toString() =>
+      'DatabaseException: $message ${cause != null ? '($cause)' : ''}';
 }
 
 class NetworkException implements Exception {

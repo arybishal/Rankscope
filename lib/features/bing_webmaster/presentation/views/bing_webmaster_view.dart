@@ -12,7 +12,10 @@ final localBingDatasourceProvider = Provider<LocalBingDatasource>((ref) {
   return LocalBingDatasource();
 });
 
-final bingMetricsFutureProvider = FutureProvider.family<List<BingMetric>, int>((ref, websiteId) async {
+final bingMetricsFutureProvider = FutureProvider.family<List<BingMetric>, int>((
+  ref,
+  websiteId,
+) async {
   final ds = ref.watch(localBingDatasourceProvider);
   return await ds.getMetrics(websiteId, limit: 100);
 });
@@ -28,13 +31,19 @@ class BingWebmasterView extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.surfacePrimary,
       appBar: AppBar(
-        title: const Text('Bing Webmaster Tools', style: AppTextStyles.titleLarge),
+        title: const Text(
+          'Bing Webmaster Tools',
+          style: AppTextStyles.titleLarge,
+        ),
       ),
       body: websitesState.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.accent)),
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.accent),
+        ),
         error: (err, _) => Center(child: Text('Error: $err')),
         data: (websites) {
-          if (websites.isEmpty) {
+          final activeWebsite = websites.findActive(selectedSiteId);
+          if (activeWebsite == null) {
             return const EmptyStateView(
               icon: Icons.language,
               title: 'No Website Selected',
@@ -42,9 +51,9 @@ class BingWebmasterView extends ConsumerWidget {
             );
           }
 
-          final activeId = selectedSiteId ?? websites.first.id!;
-          final activeWebsite = websites.firstWhere((w) => w.id == activeId, orElse: () => websites.first);
-          final metricsAsync = ref.watch(bingMetricsFutureProvider(activeWebsite.id!));
+          final metricsAsync = ref.watch(
+            bingMetricsFutureProvider(activeWebsite.id!),
+          );
 
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -58,7 +67,11 @@ class BingWebmasterView extends ConsumerWidget {
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.vpn_key_outlined, size: 20, color: AppColors.textSecondary),
+                    Icon(
+                      Icons.vpn_key_outlined,
+                      size: 20,
+                      color: AppColors.textSecondary,
+                    ),
                     SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
@@ -71,11 +84,16 @@ class BingWebmasterView extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
 
-              const Text('Bing Search Query Insights', style: AppTextStyles.titleMedium),
+              const Text(
+                'Bing Search Query Insights',
+                style: AppTextStyles.titleMedium,
+              ),
               const SizedBox(height: AppSpacing.sm),
 
               metricsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator(color: AppColors.accent)),
+                loading: () => const Center(
+                  child: CircularProgressIndicator(color: AppColors.accent),
+                ),
                 error: (e, _) => Text('Error: $e'),
                 data: (metrics) {
                   if (metrics.isEmpty) {
@@ -83,14 +101,23 @@ class BingWebmasterView extends ConsumerWidget {
                       padding: const EdgeInsets.all(AppSpacing.lg),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceSecondary,
-                        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.cardRadius,
+                        ),
                         border: Border.all(color: AppColors.borderSubtle),
                       ),
                       child: Column(
                         children: [
-                          const Icon(Icons.travel_explore_outlined, size: 40, color: AppColors.textTertiary),
+                          const Icon(
+                            Icons.travel_explore_outlined,
+                            size: 40,
+                            color: AppColors.textTertiary,
+                          ),
                           const SizedBox(height: 8),
-                          const Text('No Bing Data Synced Yet', style: AppTextStyles.labelLarge),
+                          const Text(
+                            'No Bing Data Synced Yet',
+                            style: AppTextStyles.labelLarge,
+                          ),
                           const SizedBox(height: 4),
                           Text(
                             'Add your Bing Webmaster API Key in Settings to ingest impressions and rankings for ${activeWebsite.domain}.',
@@ -106,14 +133,17 @@ class BingWebmasterView extends ConsumerWidget {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: metrics.length,
-                    separatorBuilder: (_, index) => const SizedBox(height: AppSpacing.xs),
+                    separatorBuilder: (_, index) =>
+                        const SizedBox(height: AppSpacing.xs),
                     itemBuilder: (context, index) {
                       final m = metrics[index];
                       return Container(
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
                           color: AppColors.surfacePrimary,
-                          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.cardRadius,
+                          ),
                           border: Border.all(color: AppColors.borderSubtle),
                         ),
                         child: Row(
@@ -122,18 +152,31 @@ class BingWebmasterView extends ConsumerWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(m.query, style: AppTextStyles.labelLarge),
+                                  Text(
+                                    m.query,
+                                    style: AppTextStyles.labelLarge,
+                                  ),
                                   const SizedBox(height: 2),
-                                  Text('${m.clicks} clicks • ${m.impressions} impr.', style: AppTextStyles.bodySmall),
+                                  Text(
+                                    '${m.clicks} clicks • ${m.impressions} impr.',
+                                    style: AppTextStyles.bodySmall,
+                                  ),
                                 ],
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppColors.surfaceSecondary,
-                                borderRadius: BorderRadius.circular(AppSpacing.badgeRadius),
-                                border: Border.all(color: AppColors.borderSubtle),
+                                borderRadius: BorderRadius.circular(
+                                  AppSpacing.badgeRadius,
+                                ),
+                                border: Border.all(
+                                  color: AppColors.borderSubtle,
+                                ),
                               ),
                               child: Text(
                                 'Avg #${m.averagePosition.toStringAsFixed(1)}',

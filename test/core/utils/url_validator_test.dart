@@ -4,8 +4,14 @@ import 'package:rankscope/core/utils/url_validator.dart';
 void main() {
   group('UrlValidator', () {
     test('normalizes domains by removing protocols and trailing slashes', () {
-      expect(UrlValidator.normalizeDomain('https://example.com/'), 'example.com');
-      expect(UrlValidator.normalizeDomain('http://www.sub.domain.co.uk/path?q=1'), 'sub.domain.co.uk');
+      expect(
+        UrlValidator.normalizeDomain('https://example.com/'),
+        'example.com',
+      );
+      expect(
+        UrlValidator.normalizeDomain('http://www.sub.domain.co.uk/path?q=1'),
+        'sub.domain.co.uk',
+      );
       expect(UrlValidator.normalizeDomain('EXAMPLE.COM'), 'example.com');
       expect(UrlValidator.normalizeDomain('mybrand.org:8080'), 'mybrand.org');
     });

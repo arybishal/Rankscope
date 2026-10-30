@@ -68,17 +68,25 @@ class _LogRankDialogState extends ConsumerState<LogRankDialog> {
 
     setState(() => _isSubmitting = true);
 
-    final success = await ref.read(manualRankNotifierProvider.notifier).recordRank(
-      keywordId: widget.keyword.id!,
-      websiteId: widget.websiteId,
-      position: pos,
-      rankingUrl: _urlController.text.trim().isEmpty ? null : _urlController.text.trim(),
-      searchEngine: _engine,
-      locationCountry: _country,
-      locationCity: _cityController.text.trim().isEmpty ? null : _cityController.text.trim(),
-      serpFeaturesMask: mask,
-      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-    );
+    final success = await ref
+        .read(manualRankNotifierProvider.notifier)
+        .recordRank(
+          keywordId: widget.keyword.id!,
+          websiteId: widget.websiteId,
+          position: pos,
+          rankingUrl: _urlController.text.trim().isEmpty
+              ? null
+              : _urlController.text.trim(),
+          searchEngine: _engine,
+          locationCountry: _country,
+          locationCity: _cityController.text.trim().isEmpty
+              ? null
+              : _cityController.text.trim(),
+          serpFeaturesMask: mask,
+          notes: _notesController.text.trim().isEmpty
+              ? null
+              : _notesController.text.trim(),
+        );
 
     if (mounted) {
       setState(() => _isSubmitting = false);
@@ -105,11 +113,16 @@ class _LogRankDialogState extends ConsumerState<LogRankDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Log Verified SERP Rank', style: AppTextStyles.titleLarge),
+              const Text(
+                'Log Verified SERP Rank',
+                style: AppTextStyles.titleLarge,
+              ),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'Keyword: "${widget.keyword.keywordText}"',
-                style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               AppTextField(
@@ -118,9 +131,13 @@ class _LogRankDialogState extends ConsumerState<LogRankDialog> {
                 hintText: 'e.g. 1, 4, 12',
                 keyboardType: TextInputType.number,
                 validator: (val) {
-                  if (val == null || val.trim().isEmpty) return 'Please enter ranking position';
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Please enter ranking position';
+                  }
                   final n = int.tryParse(val.trim());
-                  if (n == null || n < 1 || n > 100) return 'Position must be between 1 and 100';
+                  if (n == null || n < 1 || n > 100) {
+                    return 'Position must be between 1 and 100';
+                  }
                   return null;
                 },
               ),
@@ -143,7 +160,10 @@ class _LogRankDialogState extends ConsumerState<LogRankDialog> {
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
-              const Text('SERP Features Detected', style: AppTextStyles.labelMedium),
+              const Text(
+                'SERP Features Detected',
+                style: AppTextStyles.labelMedium,
+              ),
               const SizedBox(height: AppSpacing.xs),
               Wrap(
                 spacing: 8,

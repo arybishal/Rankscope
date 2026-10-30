@@ -1,16 +1,17 @@
 import 'package:sqflite/sqflite.dart';
+
 import '../../../../core/constants/database_constants.dart';
 import '../../../../core/database/app_database.dart';
-import '../models/keyword_model.dart';
+import '../../domain/entities/keyword.dart';
 
 /// Direct SQLite data source for keyword records.
 class LocalKeywordsDatasource {
   final AppDatabase _dbManager;
 
   LocalKeywordsDatasource({AppDatabase? dbManager})
-      : _dbManager = dbManager ?? AppDatabase.instance;
+    : _dbManager = dbManager ?? AppDatabase.instance;
 
-  Future<List<KeywordModel>> getKeywordsByWebsite(
+  Future<List<Keyword>> getKeywordsByWebsite(
     int websiteId, {
     bool? isActive,
     String? tag,
@@ -36,10 +37,10 @@ class LocalKeywordsDatasource {
       orderBy: 'latest_position IS NULL, latest_position ASC, keyword_text ASC',
     );
 
-    return results.map((m) => KeywordModel.fromMap(m)).toList();
+    return results.map((m) => Keyword.fromMap(m)).toList();
   }
 
-  Future<KeywordModel?> getKeywordById(int id) async {
+  Future<Keyword?> getKeywordById(int id) async {
     final db = await _dbManager.database;
     final results = await db.query(
       DatabaseConstants.tableKeywords,
@@ -49,10 +50,10 @@ class LocalKeywordsDatasource {
     );
 
     if (results.isEmpty) return null;
-    return KeywordModel.fromMap(results.first);
+    return Keyword.fromMap(results.first);
   }
 
-  Future<KeywordModel> insertKeyword(KeywordModel model) async {
+  Future<Keyword> insertKeyword(Keyword model) async {
     final db = await _dbManager.database;
     final id = await db.insert(
       DatabaseConstants.tableKeywords,
@@ -62,9 +63,9 @@ class LocalKeywordsDatasource {
     return model.copyWith(id: id);
   }
 
-  Future<List<KeywordModel>> insertKeywordsBatch(List<KeywordModel> models) async {
+  Future<List<Keyword>> insertKeywordsBatch(List<Keyword> models) async {
     final db = await _dbManager.database;
-    final List<KeywordModel> inserted = [];
+    final List<Keyword> inserted = [];
 
     await db.transaction((txn) async {
       for (final model in models) {
@@ -82,7 +83,7 @@ class LocalKeywordsDatasource {
     return inserted;
   }
 
-  Future<int> updateKeyword(KeywordModel model) async {
+  Future<int> updateKeyword(Keyword model) async {
     final db = await _dbManager.database;
     return await db.update(
       DatabaseConstants.tableKeywords,

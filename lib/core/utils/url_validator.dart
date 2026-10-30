@@ -9,7 +9,7 @@ class UrlValidator {
   /// Strips protocol, port, path, query parameters, and www prefix.
   static String normalizeDomain(String rawInput) {
     String cleaned = rawInput.trim().toLowerCase();
-    
+
     // Remove protocol
     if (cleaned.startsWith('https://')) {
       cleaned = cleaned.substring(8);

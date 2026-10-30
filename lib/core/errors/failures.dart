@@ -5,7 +5,8 @@ abstract class Failure {
   const Failure(this.message, {this.code});
 
   @override
-  String toString() => '$runtimeType: $message${code != null ? ' (code: $code)' : ''}';
+  String toString() =>
+      '$runtimeType: $message${code != null ? ' (code: $code)' : ''}';
 }
 
 class DatabaseFailure extends Failure {

@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -9,7 +10,6 @@ import 'package:rankscope/features/keywords/domain/entities/keyword.dart';
 import 'package:rankscope/features/keywords/presentation/controllers/keywords_controller.dart';
 import 'package:rankscope/features/reporting/data/generators/csv_report_generator.dart';
 import 'package:rankscope/features/reporting/data/generators/pdf_report_generator.dart';
-import 'package:rankscope/features/websites/domain/entities/website.dart';
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
 import 'package:rankscope/shared/widgets/cards/rank_metric_card.dart';
 import 'package:rankscope/shared/widgets/cards/ranking_badge.dart';
@@ -32,17 +32,24 @@ class DashboardView extends ConsumerWidget {
         title: const Text('RankScope', style: AppTextStyles.titleLarge),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: AppColors.textPrimary),
+            icon: const Icon(
+              Icons.add_circle_outline,
+              color: AppColors.textPrimary,
+            ),
             tooltip: 'Add Website',
             onPressed: () => _openAddWebsiteDialog(context),
           ),
         ],
       ),
       body: websitesState.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.accent)),
-        error: (err, _) => Center(child: Text('Error: $err', style: AppTextStyles.bodyMedium)),
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.accent),
+        ),
+        error: (err, _) =>
+            Center(child: Text('Error: $err', style: AppTextStyles.bodyMedium)),
         data: (websites) {
-          if (websites.isEmpty) {
+          final activeWebsite = websites.findActive(selectedSiteId);
+          if (activeWebsite == null) {
             return EmptyStateView(
               icon: Icons.language,
               title: 'No Websites Tracked',
@@ -51,12 +58,6 @@ class DashboardView extends ConsumerWidget {
               onAction: () => _openAddWebsiteDialog(context),
             );
           }
-
-          final activeId = selectedSiteId ?? websites.first.id!;
-          final activeWebsite = websites.firstWhere(
-            (w) => w.id == activeId,
-            orElse: () => websites.first,
-          );
 
           return _DashboardContent(
             website: activeWebsite,
@@ -68,10 +69,7 @@ class DashboardView extends ConsumerWidget {
   }
 
   void _openAddWebsiteDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => const AddWebsiteDialog(),
-    );
+    showDialog(context: context, builder: (_) => const AddWebsiteDialog());
   }
 }
 
@@ -79,10 +77,7 @@ class _DashboardContent extends ConsumerWidget {
   final Website website;
   final List<Website> allWebsites;
 
-  const _DashboardContent({
-    required this.website,
-    required this.allWebsites,
-  });
+  const _DashboardContent({required this.website, required this.allWebsites});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -91,7 +86,9 @@ class _DashboardContent extends ConsumerWidget {
     return RefreshIndicator(
       color: AppColors.accent,
       onRefresh: () async {
-        await ref.read(keywordsFamilyProvider(website.id!).notifier).loadKeywords();
+        await ref
+            .read(keywordsFamilyProvider(website.id!).notifier)
+            .loadKeywords();
       },
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -101,7 +98,10 @@ class _DashboardContent extends ConsumerWidget {
             children: [
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceSecondary,
                     borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
@@ -118,21 +118,39 @@ class _DashboardContent extends ConsumerWidget {
                           child: Row(
                             children: [
                               Icon(
-                                w.isCompetitor ? Icons.shield_outlined : Icons.check_circle_outline,
+                                w.isCompetitor
+                                    ? Icons.shield_outlined
+                                    : Icons.check_circle_outline,
                                 size: 16,
-                                color: w.isCompetitor ? AppColors.rankDrop : AppColors.rankGain,
+                                color: w.isCompetitor
+                                    ? AppColors.rankDrop
+                                    : AppColors.rankGain,
                               ),
                               const SizedBox(width: 8),
-                              Flexible(child: Text(w.label, style: AppTextStyles.labelLarge, overflow: TextOverflow.ellipsis)),
+                              Flexible(
+                                child: Text(
+                                  w.label,
+                                  style: AppTextStyles.labelLarge,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                               const SizedBox(width: 6),
-                              Flexible(child: Text('(${w.domain})', style: AppTextStyles.bodySmall, overflow: TextOverflow.ellipsis)),
+                              Flexible(
+                                child: Text(
+                                  '(${w.domain})',
+                                  style: AppTextStyles.bodySmall,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ],
                           ),
                         );
                       }).toList(),
                       onChanged: (id) {
                         if (id != null) {
-                          ref.read(selectedWebsiteIdProvider.notifier).select(id);
+                          ref
+                              .read(selectedWebsiteIdProvider.notifier)
+                              .select(id);
                         }
                       },
                     ),
@@ -141,12 +159,20 @@ class _DashboardContent extends ConsumerWidget {
               ),
               const SizedBox(width: AppSpacing.xs),
               IconButton(
-                icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.textSecondary),
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 20,
+                  color: AppColors.textSecondary,
+                ),
                 tooltip: 'Edit Website',
                 onPressed: () => _openEditWebsiteDialog(context, website),
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.rankDrop),
+                icon: const Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: AppColors.rankDrop,
+                ),
                 tooltip: 'Delete Website',
                 onPressed: () => _confirmDeleteWebsite(context, ref, website),
               ),
@@ -156,19 +182,29 @@ class _DashboardContent extends ConsumerWidget {
 
           // KPI Grid
           keywordsState.when(
-            loading: () => const Center(child: Padding(
-              padding: EdgeInsets.all(32),
-              child: CircularProgressIndicator(color: AppColors.accent),
-            )),
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(color: AppColors.accent),
+              ),
+            ),
             error: (e, _) => Text('Error loading keywords: $e'),
             data: (keywords) {
               final total = keywords.length;
-              final top3 = keywords.where((k) => (k.latestPosition ?? 101) <= 3).length;
-              final top10 = keywords.where((k) => (k.latestPosition ?? 101) <= 10).length;
-              final ranked = keywords.where((k) => k.latestPosition != null).toList();
+              final top3 = keywords
+                  .where((k) => (k.latestPosition ?? 101) <= 3)
+                  .length;
+              final top10 = keywords
+                  .where((k) => (k.latestPosition ?? 101) <= 10)
+                  .length;
+              final ranked = keywords
+                  .where((k) => k.latestPosition != null)
+                  .toList();
               double avg = 0.0;
               if (ranked.isNotEmpty) {
-                avg = ranked.fold<int>(0, (sum, k) => sum + k.latestPosition!) / ranked.length;
+                avg =
+                    ranked.fold<int>(0, (sum, k) => sum + k.latestPosition!) /
+                    ranked.length;
               }
 
               return Column(
@@ -219,7 +255,10 @@ class _DashboardContent extends ConsumerWidget {
                   Row(
                     children: [
                       OutlinedButton.icon(
-                        icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                        icon: const Icon(
+                          Icons.picture_as_pdf_outlined,
+                          size: 16,
+                        ),
                         label: const Text('Export PDF'),
                         onPressed: keywords.isEmpty
                             ? null
@@ -235,16 +274,23 @@ class _DashboardContent extends ConsumerWidget {
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.add, color: AppColors.textPrimary),
+                        icon: const Icon(
+                          Icons.add,
+                          color: AppColors.textPrimary,
+                        ),
                         tooltip: 'Add Keyword',
-                        onPressed: () => _openAddKeywordDialog(context, ref, website.id!),
+                        onPressed: () =>
+                            _openAddKeywordDialog(context, ref, website.id!),
                       ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
 
                   // Keyword List Header
-                  const Text('Tracked Keywords', style: AppTextStyles.titleMedium),
+                  const Text(
+                    'Tracked Keywords',
+                    style: AppTextStyles.titleMedium,
+                  ),
                   const SizedBox(height: AppSpacing.xs),
 
                   if (keywords.isEmpty)
@@ -253,13 +299,17 @@ class _DashboardContent extends ConsumerWidget {
                       child: EmptyStateView(
                         icon: Icons.search,
                         title: 'No Keywords Added',
-                        description: 'Add search queries you want to monitor for ${website.domain}.',
+                        description:
+                            'Add search queries you want to monitor for ${website.domain}.',
                         actionLabel: 'Add First Keyword',
-                        onAction: () => _openAddKeywordDialog(context, ref, website.id!),
+                        onAction: () =>
+                            _openAddKeywordDialog(context, ref, website.id!),
                       ),
                     )
                   else
-                    ...keywords.map((k) => _KeywordTile(keyword: k, websiteId: website.id!)),
+                    ...keywords.map(
+                      (k) => _KeywordTile(keyword: k, websiteId: website.id!),
+                    ),
                 ],
               );
             },
@@ -269,14 +319,20 @@ class _DashboardContent extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportPdf(BuildContext context, Website website, List<Keyword> keywords) async {
+  Future<void> _exportPdf(
+    BuildContext context,
+    Website website,
+    List<Keyword> keywords,
+  ) async {
     try {
       final pdfBytes = await PdfReportGenerator.generatePdfReport(
         website: website,
         keywords: keywords,
       );
       final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/RankScope_${website.domain}_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      final file = File(
+        '${dir.path}/RankScope_${website.domain}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
       await file.writeAsBytes(pdfBytes);
       await SharePlus.instance.share(
         ShareParams(
@@ -286,19 +342,26 @@ class _DashboardContent extends ConsumerWidget {
       );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to export PDF: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to export PDF: $e')));
       }
     }
   }
 
-  Future<void> _exportCsv(BuildContext context, Website website, List<Keyword> keywords) async {
+  Future<void> _exportCsv(
+    BuildContext context,
+    Website website,
+    List<Keyword> keywords,
+  ) async {
     try {
       final csvBytes = CsvReportGenerator.generateKeywordsCsv(
         website: website,
         keywords: keywords,
       );
       final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/RankScope_${website.domain}_${DateTime.now().millisecondsSinceEpoch}.csv');
+      final file = File(
+        '${dir.path}/RankScope_${website.domain}_${DateTime.now().millisecondsSinceEpoch}.csv',
+      );
       await file.writeAsBytes(csvBytes);
       await SharePlus.instance.share(
         ShareParams(
@@ -308,12 +371,17 @@ class _DashboardContent extends ConsumerWidget {
       );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to export CSV: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to export CSV: $e')));
       }
     }
   }
 
-  void _openAddKeywordDialog(BuildContext context, WidgetRef ref, int websiteId) {
+  void _openAddKeywordDialog(
+    BuildContext context,
+    WidgetRef ref,
+    int websiteId,
+  ) {
     final textController = TextEditingController();
     showDialog(
       context: context,
@@ -340,7 +408,9 @@ class _DashboardContent extends ConsumerWidget {
             onPressed: () async {
               final text = textController.text.trim();
               if (text.isNotEmpty) {
-                await ref.read(keywordsFamilyProvider(websiteId).notifier).addKeyword(keywordText: text);
+                await ref
+                    .read(keywordsFamilyProvider(websiteId).notifier)
+                    .addKeyword(keywordText: text);
                 if (context.mounted) Navigator.pop(context);
               }
             },
@@ -358,7 +428,11 @@ class _DashboardContent extends ConsumerWidget {
     );
   }
 
-  void _confirmDeleteWebsite(BuildContext context, WidgetRef ref, Website website) {
+  void _confirmDeleteWebsite(
+    BuildContext context,
+    WidgetRef ref,
+    Website website,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -379,14 +453,20 @@ class _DashboardContent extends ConsumerWidget {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.rankDrop),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.rankDrop,
+            ),
             onPressed: () async {
               Navigator.of(ctx).pop();
               try {
-                await ref.read(websitesProvider.notifier).deleteWebsite(website.id!);
+                await ref
+                    .read(websitesProvider.notifier)
+                    .deleteWebsite(website.id!);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Website "${website.label}" deleted.')),
+                    SnackBar(
+                      content: Text('Website "${website.label}" deleted.'),
+                    ),
                   );
                 }
               } catch (e) {
@@ -409,10 +489,7 @@ class _KeywordTile extends ConsumerWidget {
   final Keyword keyword;
   final int websiteId;
 
-  const _KeywordTile({
-    required this.keyword,
-    required this.websiteId,
-  });
+  const _KeywordTile({required this.keyword, required this.websiteId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -435,10 +512,7 @@ class _KeywordTile extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  keyword.keywordText,
-                  style: AppTextStyles.labelLarge,
-                ),
+                Text(keyword.keywordText, style: AppTextStyles.labelLarge),
                 const SizedBox(height: 2),
                 Text(
                   keyword.targetCity != null
@@ -455,13 +529,13 @@ class _KeywordTile extends ConsumerWidget {
             onPressed: () async {
               final updated = await showDialog<bool>(
                 context: context,
-                builder: (_) => LogRankDialog(
-                  keyword: keyword,
-                  websiteId: websiteId,
-                ),
+                builder: (_) =>
+                    LogRankDialog(keyword: keyword, websiteId: websiteId),
               );
               if (updated == true) {
-                ref.read(keywordsFamilyProvider(websiteId).notifier).loadKeywords();
+                ref
+                    .read(keywordsFamilyProvider(websiteId).notifier)
+                    .loadKeywords();
               }
             },
           ),

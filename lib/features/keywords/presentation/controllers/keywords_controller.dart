@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../data/repositories/keywords_repository_impl.dart';
 import '../../domain/entities/keyword.dart';
 import '../../domain/repositories/keywords_repository.dart';
@@ -55,6 +56,7 @@ class KeywordsNotifier extends AsyncNotifier<List<Keyword>> {
   }
 }
 
-final keywordsFamilyProvider = AsyncNotifierProvider.family<KeywordsNotifier, List<Keyword>, int>(
-  (websiteId) => KeywordsNotifier(websiteId),
-);
+final keywordsFamilyProvider =
+    AsyncNotifierProvider.family<KeywordsNotifier, List<Keyword>, int>(
+      (websiteId) => KeywordsNotifier(websiteId),
+    );

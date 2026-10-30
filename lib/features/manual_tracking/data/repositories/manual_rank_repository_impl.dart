@@ -9,7 +9,7 @@ class ManualRankRepositoryImpl implements ManualRankRepository {
   final LocalManualRankDatasource _localDatasource;
 
   ManualRankRepositoryImpl({LocalManualRankDatasource? localDatasource})
-      : _localDatasource = localDatasource ?? LocalManualRankDatasource();
+    : _localDatasource = localDatasource ?? LocalManualRankDatasource();
 
   @override
   Future<ManualRankRecord> recordRank(ManualRankRecord record) async {
@@ -22,20 +22,36 @@ class ManualRankRepositoryImpl implements ManualRankRepository {
   }
 
   @override
-  Future<List<ManualRankRecord>> getHistoryForKeyword(int keywordId, {int limit = 50}) async {
+  Future<List<ManualRankRecord>> getHistoryForKeyword(
+    int keywordId, {
+    int limit = 50,
+  }) async {
     try {
-      return await _localDatasource.getHistoryForKeyword(keywordId, limit: limit);
+      return await _localDatasource.getHistoryForKeyword(
+        keywordId,
+        limit: limit,
+      );
     } catch (e) {
-      throw DatabaseFailure('Failed to fetch history for keyword #$keywordId: $e');
+      throw DatabaseFailure(
+        'Failed to fetch history for keyword #$keywordId: $e',
+      );
     }
   }
 
   @override
-  Future<List<ManualRankRecord>> getLatestRecordsForWebsite(int websiteId, {int limit = 100}) async {
+  Future<List<ManualRankRecord>> getLatestRecordsForWebsite(
+    int websiteId, {
+    int limit = 100,
+  }) async {
     try {
-      return await _localDatasource.getLatestRecordsForWebsite(websiteId, limit: limit);
+      return await _localDatasource.getLatestRecordsForWebsite(
+        websiteId,
+        limit: limit,
+      );
     } catch (e) {
-      throw DatabaseFailure('Failed to fetch rank records for website #$websiteId: $e');
+      throw DatabaseFailure(
+        'Failed to fetch rank records for website #$websiteId: $e',
+      );
     }
   }
 

@@ -1,7 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../data/repositories/websites_repository_impl.dart';
 import '../../domain/entities/website.dart';
 import '../../domain/repositories/websites_repository.dart';
+
+export '../../domain/entities/website.dart';
 
 final websitesRepositoryProvider = Provider<WebsitesRepository>((ref) {
   return WebsitesRepositoryImpl();
@@ -14,7 +17,10 @@ class SelectedWebsiteIdNotifier extends Notifier<int?> {
   void select(int? id) => state = id;
 }
 
-final selectedWebsiteIdProvider = NotifierProvider<SelectedWebsiteIdNotifier, int?>(SelectedWebsiteIdNotifier.new);
+final selectedWebsiteIdProvider =
+    NotifierProvider<SelectedWebsiteIdNotifier, int?>(
+      SelectedWebsiteIdNotifier.new,
+    );
 
 class WebsitesNotifier extends AsyncNotifier<List<Website>> {
   @override
@@ -78,4 +84,6 @@ class WebsitesNotifier extends AsyncNotifier<List<Website>> {
   }
 }
 
-final websitesProvider = AsyncNotifierProvider<WebsitesNotifier, List<Website>>(WebsitesNotifier.new);
+final websitesProvider = AsyncNotifierProvider<WebsitesNotifier, List<Website>>(
+  WebsitesNotifier.new,
+);

@@ -5,12 +5,11 @@ class SecureStorageService {
   final FlutterSecureStorage _storage;
 
   SecureStorageService({FlutterSecureStorage? storage})
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              aOptions: AndroidOptions(
-                resetOnError: true,
-              ),
-            );
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            aOptions: AndroidOptions(resetOnError: true),
+          );
 
   static const String _keyGscRefreshToken = 'gsc_refresh_token';
   static const String _keyGscAccessToken = 'gsc_access_token';
@@ -30,7 +29,10 @@ class SecureStorageService {
 
   Future<void> saveGscAccessToken(String token, int expiryEpochMs) async {
     await _storage.write(key: _keyGscAccessToken, value: token);
-    await _storage.write(key: _keyGscTokenExpiry, value: expiryEpochMs.toString());
+    await _storage.write(
+      key: _keyGscTokenExpiry,
+      value: expiryEpochMs.toString(),
+    );
   }
 
   Future<String?> getGscAccessToken() async {

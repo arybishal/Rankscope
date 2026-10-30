@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+
 import 'migration.dart';
 
 /// Migration 001: Initial schema containing all 8 core tables and performance indexes.

@@ -14,25 +14,26 @@ void setupSqfliteFfi() {
 void setupMockSecureStorage([Map<String, String>? initialValues]) {
   TestWidgetsFlutterBinding.ensureInitialized();
   final values = initialValues ?? <String, String>{};
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
-    const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-    (MethodCall call) async {
-      final args = call.arguments as Map?;
-      if (call.method == 'read') {
-        return values[args?['key']];
-      } else if (call.method == 'write') {
-        if (args != null && args['key'] != null) {
-          values[args['key'] as String] = args['value'] as String;
-        }
-        return null;
-      } else if (call.method == 'delete') {
-        if (args != null) values.remove(args['key']);
-        return null;
-      } else if (call.method == 'deleteAll') {
-        values.clear();
-        return null;
-      }
-      return null;
-    },
-  );
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        (MethodCall call) async {
+          final args = call.arguments as Map?;
+          if (call.method == 'read') {
+            return values[args?['key']];
+          } else if (call.method == 'write') {
+            if (args != null && args['key'] != null) {
+              values[args['key'] as String] = args['value'] as String;
+            }
+            return null;
+          } else if (call.method == 'delete') {
+            if (args != null) values.remove(args['key']);
+            return null;
+          } else if (call.method == 'deleteAll') {
+            values.clear();
+            return null;
+          }
+          return null;
+        },
+      );
 }

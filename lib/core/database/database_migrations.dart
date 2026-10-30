@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+
 import 'migrations/migration.dart';
 import 'migrations/m001_initial_schema.dart';
 import 'migrations/m002_add_logs_table.dart';
@@ -13,7 +14,11 @@ class DatabaseMigrations {
   };
 
   /// Executes all migrations needed to bring the database to target version.
-  static Future<void> applyMigrations(Database db, int oldVersion, int newVersion) async {
+  static Future<void> applyMigrations(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
     for (int v = oldVersion + 1; v <= newVersion; v++) {
       final migration = migrations[v];
       if (migration != null) {

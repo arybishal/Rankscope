@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/spacing.dart';
@@ -38,11 +39,7 @@ class EmptyStateView extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.borderSubtle),
               ),
-              child: Icon(
-                icon,
-                size: 28,
-                color: AppColors.textTertiary,
-              ),
+              child: Icon(icon, size: 28, color: AppColors.textTertiary),
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
@@ -54,7 +51,9 @@ class EmptyStateView extends StatelessWidget {
             Text(
               description,
               textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textTertiary),
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textTertiary,
+              ),
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: AppSpacing.lg),

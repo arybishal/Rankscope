@@ -58,7 +58,9 @@ class _LogsViewState extends State<LogsView> {
     final logs = await _logger.getLogs(
       level: _selectedLevel,
       module: _selectedModule,
-      searchQuery: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
+      searchQuery: _searchController.text.trim().isEmpty
+          ? null
+          : _searchController.text.trim(),
     );
 
     if (mounted) {
@@ -75,7 +77,9 @@ class _LogsViewState extends State<LogsView> {
     await Clipboard.setData(ClipboardData(text: text));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Copied ${_logs.length} log entries to clipboard.')),
+        SnackBar(
+          content: Text('Copied ${_logs.length} log entries to clipboard.'),
+        ),
       );
     }
   }
@@ -125,7 +129,10 @@ class _LogsViewState extends State<LogsView> {
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
           side: const BorderSide(color: AppColors.borderSubtle),
         ),
-        title: const Text('Clear All Diagnostic Logs', style: AppTextStyles.titleLarge),
+        title: const Text(
+          'Clear All Diagnostic Logs',
+          style: AppTextStyles.titleLarge,
+        ),
         content: const Text(
           'Are you sure you want to delete all stored diagnostic logs? This action cannot be undone.',
           style: AppTextStyles.bodyMedium,
@@ -136,7 +143,9 @@ class _LogsViewState extends State<LogsView> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.rankDrop),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.rankDrop,
+            ),
             onPressed: () async {
               Navigator.of(ctx).pop();
               await _logger.clearLogs();
@@ -147,7 +156,10 @@ class _LogsViewState extends State<LogsView> {
                 );
               }
             },
-            child: const Text('Clear Logs', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Clear Logs',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -185,7 +197,9 @@ class _LogsViewState extends State<LogsView> {
               decoration: BoxDecoration(
                 color: _getLevelColor(entry.level).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: _getLevelColor(entry.level).withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: _getLevelColor(entry.level).withValues(alpha: 0.4),
+                ),
               ),
               child: Text(
                 entry.level.label,
@@ -212,11 +226,15 @@ class _LogsViewState extends State<LogsView> {
             children: [
               Text(
                 'Timestamp: ${DateFormat('yyyy-MM-dd HH:mm:ss.SSS').format(entry.timestamp)}',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
               Text(
                 'Module: ${entry.module}',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
               const Divider(color: AppColors.borderSubtle),
@@ -226,7 +244,10 @@ class _LogsViewState extends State<LogsView> {
               SelectableText(entry.message, style: AppTextStyles.bodyMedium),
               if (entry.details != null && entry.details!.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
-                const Text('Technical Details / StackTrace', style: AppTextStyles.labelLarge),
+                const Text(
+                  'Technical Details / StackTrace',
+                  style: AppTextStyles.labelLarge,
+                ),
                 const SizedBox(height: 4),
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.sm),
@@ -253,10 +274,14 @@ class _LogsViewState extends State<LogsView> {
             icon: const Icon(Icons.copy, size: 16),
             label: const Text('Copy Log'),
             onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: entry.toFormattedString()));
+              await Clipboard.setData(
+                ClipboardData(text: entry.toFormattedString()),
+              );
               if (ctx.mounted) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('Log entry copied to clipboard.')),
+                  const SnackBar(
+                    content: Text('Log entry copied to clipboard.'),
+                  ),
                 );
               }
             },
@@ -277,7 +302,10 @@ class _LogsViewState extends State<LogsView> {
     return Scaffold(
       backgroundColor: AppColors.surfacePrimary,
       appBar: AppBar(
-        title: const Text('Logs & Diagnostics', style: AppTextStyles.titleLarge),
+        title: const Text(
+          'Logs & Diagnostics',
+          style: AppTextStyles.titleLarge,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
@@ -328,9 +356,16 @@ class _LogsViewState extends State<LogsView> {
                 value: 'clear',
                 child: Row(
                   children: [
-                    Icon(Icons.delete_outline, size: 18, color: AppColors.rankDrop),
+                    Icon(
+                      Icons.delete_outline,
+                      size: 18,
+                      color: AppColors.rankDrop,
+                    ),
                     SizedBox(width: 8),
-                    Text('Clear Logs', style: TextStyle(color: AppColors.rankDrop)),
+                    Text(
+                      'Clear Logs',
+                      style: TextStyle(color: AppColors.rankDrop),
+                    ),
                   ],
                 ),
               ),
@@ -342,7 +377,10 @@ class _LogsViewState extends State<LogsView> {
         children: [
           // Metrics Cards Row
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
             child: Row(
               children: [
                 Expanded(
@@ -357,7 +395,9 @@ class _LogsViewState extends State<LogsView> {
                   child: _StatCard(
                     title: 'Errors',
                     value: '${_stats['errors'] ?? 0}',
-                    color: (_stats['errors'] ?? 0) > 0 ? AppColors.rankDrop : AppColors.textSecondary,
+                    color: (_stats['errors'] ?? 0) > 0
+                        ? AppColors.rankDrop
+                        : AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -365,7 +405,9 @@ class _LogsViewState extends State<LogsView> {
                   child: _StatCard(
                     title: 'Warnings',
                     value: '${_stats['warnings'] ?? 0}',
-                    color: (_stats['warnings'] ?? 0) > 0 ? const Color(0xFFD97706) : AppColors.textSecondary,
+                    color: (_stats['warnings'] ?? 0) > 0
+                        ? const Color(0xFFD97706)
+                        : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -389,7 +431,10 @@ class _LogsViewState extends State<LogsView> {
                         },
                       )
                     : null,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
               ),
               onSubmitted: (_) => _loadLogs(),
             ),
@@ -398,32 +443,49 @@ class _LogsViewState extends State<LogsView> {
 
           // Filters Row (Level & Module)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: 4,
+            ),
             child: Row(
               children: [
                 // Level Dropdown
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceSecondary,
-                      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.cardRadius,
+                      ),
                       border: Border.all(color: AppColors.borderSubtle),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<LogLevel?>(
                         value: _selectedLevel,
                         isExpanded: true,
-                        hint: const Text('All Levels', style: AppTextStyles.bodySmall),
+                        hint: const Text(
+                          'All Levels',
+                          style: AppTextStyles.bodySmall,
+                        ),
                         items: [
                           const DropdownMenuItem<LogLevel?>(
                             value: null,
-                            child: Text('All Levels', style: AppTextStyles.bodySmall),
+                            child: Text(
+                              'All Levels',
+                              style: AppTextStyles.bodySmall,
+                            ),
                           ),
                           ...LogLevel.values.map(
                             (lvl) => DropdownMenuItem<LogLevel?>(
                               value: lvl,
-                              child: Text(lvl.label, style: AppTextStyles.bodySmall),
+                              child: Text(
+                                lvl.label,
+                                style: AppTextStyles.bodySmall,
+                              ),
                             ),
                           ),
                         ],
@@ -440,10 +502,15 @@ class _LogsViewState extends State<LogsView> {
                 // Module Dropdown
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceSecondary,
-                      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.cardRadius,
+                      ),
                       border: Border.all(color: AppColors.borderSubtle),
                     ),
                     child: DropdownButtonHideUnderline(
@@ -453,7 +520,10 @@ class _LogsViewState extends State<LogsView> {
                         items: _modules.map((m) {
                           return DropdownMenuItem<String>(
                             value: m,
-                            child: Text(m == 'ALL' ? 'All Modules' : m, style: AppTextStyles.bodySmall),
+                            child: Text(
+                              m == 'ALL' ? 'All Modules' : m,
+                              style: AppTextStyles.bodySmall,
+                            ),
                           );
                         }).toList(),
                         onChanged: (m) {
@@ -474,100 +544,124 @@ class _LogsViewState extends State<LogsView> {
           // Logs List View
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.accent))
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.accent),
+                  )
                 : _logs.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.history_toggle_off, size: 48, color: AppColors.textTertiary),
-                            const SizedBox(height: 8),
-                            const Text('No Diagnostic Logs Found', style: AppTextStyles.titleMedium),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Events will appear here as the application runs.',
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.history_toggle_off,
+                          size: 48,
+                          color: AppColors.textTertiary,
                         ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        itemCount: _logs.length,
-                        separatorBuilder: (_, index) => const SizedBox(height: AppSpacing.xs),
-                        itemBuilder: (context, index) {
-                          final log = _logs[index];
-                          final color = _getLevelColor(log.level);
+                        const SizedBox(height: 8),
+                        const Text(
+                          'No Diagnostic Logs Found',
+                          style: AppTextStyles.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Events will appear here as the application runs.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    itemCount: _logs.length,
+                    separatorBuilder: (_, index) =>
+                        const SizedBox(height: AppSpacing.xs),
+                    itemBuilder: (context, index) {
+                      final log = _logs[index];
+                      final color = _getLevelColor(log.level);
 
-                          return InkWell(
-                            onTap: () => _showLogDetails(log),
-                            borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                            child: Container(
-                              padding: const EdgeInsets.all(AppSpacing.sm),
-                              decoration: BoxDecoration(
-                                color: AppColors.surfacePrimary,
-                                borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                                border: Border.all(color: AppColors.borderSubtle),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: color.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      log.level.label,
-                                      style: TextStyle(
-                                        color: color,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                      return InkWell(
+                        onTap: () => _showLogDetails(log),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.cardRadius,
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(AppSpacing.sm),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfacePrimary,
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.cardRadius,
+                            ),
+                            border: Border.all(color: AppColors.borderSubtle),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  log.level.label,
+                                  style: TextStyle(
+                                    color: color,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
                                       children: [
-                                        Row(
-                                          children: [
-                                            Text(
-                                              '[${log.module}] ${log.eventName}',
-                                              style: AppTextStyles.labelMedium,
-                                            ),
-                                            const Spacer(),
-                                            Text(
-                                              dateFormat.format(log.timestamp),
-                                              style: const TextStyle(
-                                                fontSize: 10,
-                                                color: AppColors.textTertiary,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 2),
                                         Text(
-                                          log.message,
-                                          style: AppTextStyles.bodySmall,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
+                                          '[${log.module}] ${log.eventName}',
+                                          style: AppTextStyles.labelMedium,
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          dateFormat.format(log.timestamp),
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: AppColors.textTertiary,
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  if (log.details != null && log.details!.isNotEmpty) ...[
-                                    const SizedBox(width: 6),
-                                    const Icon(Icons.info_outline, size: 14, color: AppColors.textTertiary),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      log.message,
+                                      style: AppTextStyles.bodySmall,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ],
-                                ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                              if (log.details != null &&
+                                  log.details!.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.info_outline,
+                                  size: 14,
+                                  color: AppColors.textTertiary,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -598,7 +692,13 @@ class _StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppColors.textSecondary,
+            ),
+          ),
           const SizedBox(height: 2),
           Text(
             value,

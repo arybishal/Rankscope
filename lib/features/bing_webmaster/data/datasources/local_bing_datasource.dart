@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+
 import '../../../../core/constants/database_constants.dart';
 import '../../../../core/database/app_database.dart';
 import '../models/bing_metric_model.dart';
@@ -8,7 +9,7 @@ class LocalBingDatasource {
   final AppDatabase _dbManager;
 
   LocalBingDatasource({AppDatabase? dbManager})
-      : _dbManager = dbManager ?? AppDatabase.instance;
+    : _dbManager = dbManager ?? AppDatabase.instance;
 
   Future<int> upsertMetricsBatch(List<BingMetricModel> models) async {
     final db = await _dbManager.database;
@@ -28,7 +29,10 @@ class LocalBingDatasource {
     return count;
   }
 
-  Future<List<BingMetricModel>> getMetrics(int websiteId, {int limit = 100}) async {
+  Future<List<BingMetricModel>> getMetrics(
+    int websiteId, {
+    int limit = 100,
+  }) async {
     final db = await _dbManager.database;
     final results = await db.query(
       DatabaseConstants.tableBingSearchAnalytics,

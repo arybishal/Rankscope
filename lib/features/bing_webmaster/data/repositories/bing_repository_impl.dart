@@ -12,8 +12,8 @@ class BingRepositoryImpl implements BingRepository {
   BingRepositoryImpl({
     LocalBingDatasource? localDatasource,
     RemoteBingDatasource? remoteDatasource,
-  })  : _localDatasource = localDatasource ?? LocalBingDatasource(),
-        _remoteDatasource = remoteDatasource ?? RemoteBingDatasource();
+  }) : _localDatasource = localDatasource ?? LocalBingDatasource(),
+       _remoteDatasource = remoteDatasource ?? RemoteBingDatasource();
 
   @override
   Future<List<BingMetric>> getMetrics(int websiteId, {int limit = 100}) async {
@@ -25,7 +25,10 @@ class BingRepositoryImpl implements BingRepository {
   }
 
   @override
-  Future<int> syncMetricsFromApi({required int websiteId, required String siteUrl}) async {
+  Future<int> syncMetricsFromApi({
+    required int websiteId,
+    required String siteUrl,
+  }) async {
     try {
       final remoteRows = await _remoteDatasource.getQueryStats(
         websiteId: websiteId,

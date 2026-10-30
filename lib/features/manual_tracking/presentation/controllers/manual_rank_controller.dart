@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../data/repositories/manual_rank_repository_impl.dart';
 import '../../domain/entities/manual_rank_record.dart';
 import '../../domain/repositories/manual_rank_repository.dart';
@@ -48,9 +49,11 @@ class ManualRankNotifier extends AsyncNotifier<void> {
   }
 }
 
-final manualRankNotifierProvider = AsyncNotifierProvider<ManualRankNotifier, void>(ManualRankNotifier.new);
+final manualRankNotifierProvider =
+    AsyncNotifierProvider<ManualRankNotifier, void>(ManualRankNotifier.new);
 
-final keywordHistoryProvider = FutureProvider.family<List<ManualRankRecord>, int>((ref, keywordId) async {
-  final repo = ref.watch(manualRankRepositoryProvider);
-  return await repo.getHistoryForKeyword(keywordId);
-});
+final keywordHistoryProvider =
+    FutureProvider.family<List<ManualRankRecord>, int>((ref, keywordId) async {
+      final repo = ref.watch(manualRankRepositoryProvider);
+      return await repo.getHistoryForKeyword(keywordId);
+    });

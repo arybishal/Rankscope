@@ -44,7 +44,9 @@ class ManualRankRecordModel extends ManualRankRecord {
       locationCity: map['location_city'] as String?,
       serpFeaturesMask: map['serp_features_mask'] as int? ?? 0,
       notes: map['notes'] as String?,
-      recordedAt: DateTime.fromMillisecondsSinceEpoch(map['recorded_at'] as int),
+      recordedAt: DateTime.fromMillisecondsSinceEpoch(
+        map['recorded_at'] as int,
+      ),
     );
   }
 

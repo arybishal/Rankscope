@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:intl/intl.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+
 import '../constants/database_constants.dart';
 import '../database/app_database.dart';
 import 'log_entry.dart';
@@ -27,15 +29,30 @@ class AppLogger {
 
   // --- Convenience Logging Methods ---
 
-  Future<void> debug(String module, String eventName, String message, {String? details}) async {
+  Future<void> debug(
+    String module,
+    String eventName,
+    String message, {
+    String? details,
+  }) async {
     await log(LogLevel.debug, module, eventName, message, details: details);
   }
 
-  Future<void> info(String module, String eventName, String message, {String? details}) async {
+  Future<void> info(
+    String module,
+    String eventName,
+    String message, {
+    String? details,
+  }) async {
     await log(LogLevel.info, module, eventName, message, details: details);
   }
 
-  Future<void> warning(String module, String eventName, String message, {String? details}) async {
+  Future<void> warning(
+    String module,
+    String eventName,
+    String message, {
+    String? details,
+  }) async {
     await log(LogLevel.warning, module, eventName, message, details: details);
   }
 
@@ -87,7 +104,9 @@ class AppLogger {
   }) async {
     try {
       final sanitizedMessage = LogSanitizer.sanitize(message);
-      final sanitizedDetails = details != null ? LogSanitizer.sanitize(details) : null;
+      final sanitizedDetails = details != null
+          ? LogSanitizer.sanitize(details)
+          : null;
       final now = DateTime.now();
 
       final entry = LogEntry(
@@ -155,7 +174,9 @@ class AppLogger {
     }
 
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
-      whereClauses.add('(message LIKE ? OR event_name LIKE ? OR module LIKE ?)');
+      whereClauses.add(
+        '(message LIKE ? OR event_name LIKE ? OR module LIKE ?)',
+      );
       final term = '%${searchQuery.trim()}%';
       whereArgs.addAll([term, term, term]);
     }
@@ -181,7 +202,9 @@ class AppLogger {
   Future<Map<String, dynamic>> getLogStats() async {
     final db = await _dbManager.database;
 
-    final totalResult = await db.rawQuery('SELECT COUNT(*) as count FROM ${DatabaseConstants.tableAppLogs};');
+    final totalResult = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM ${DatabaseConstants.tableAppLogs};',
+    );
     final int total = Sqflite.firstIntValue(totalResult) ?? 0;
 
     final errorResult = await db.rawQuery(
@@ -253,7 +276,8 @@ class AppLogger {
     final text = await exportAsTextString();
     final now = DateTime.now();
     final timestampStr = DateFormat('yyyy-MM-dd_HH-mm').format(now);
-    final dir = destinationDir ?? (await getApplicationDocumentsDirectory()).path;
+    final dir =
+        destinationDir ?? (await getApplicationDocumentsDirectory()).path;
     final file = File(join(dir, 'RankScope_Logs_$timestampStr.txt'));
     await file.writeAsString(text, flush: true);
     return file;
@@ -264,7 +288,8 @@ class AppLogger {
     final jsonText = await exportAsJsonString();
     final now = DateTime.now();
     final timestampStr = DateFormat('yyyy-MM-dd_HH-mm').format(now);
-    final dir = destinationDir ?? (await getApplicationDocumentsDirectory()).path;
+    final dir =
+        destinationDir ?? (await getApplicationDocumentsDirectory()).path;
     final file = File(join(dir, 'RankScope_Logs_$timestampStr.json'));
     await file.writeAsString(jsonText, flush: true);
     return file;

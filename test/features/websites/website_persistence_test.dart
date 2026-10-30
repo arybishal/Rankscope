@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rankscope/core/database/app_database.dart';
 import 'package:rankscope/core/errors/failures.dart';
@@ -7,6 +8,7 @@ import 'package:rankscope/features/keywords/data/models/keyword_model.dart';
 import 'package:rankscope/features/websites/data/datasources/local_websites_datasource.dart';
 import 'package:rankscope/features/websites/data/models/website_model.dart';
 import 'package:rankscope/features/websites/data/repositories/websites_repository_impl.dart';
+
 import '../../test_helper.dart';
 
 void main() {
@@ -72,75 +74,81 @@ void main() {
       );
     });
 
-    test('3. updateWebsite modifies existing record without creating duplicate', () async {
-      await AppDatabase.instance.initCustom(inMemoryDatabasePath);
-      final datasource = LocalWebsitesDatasource();
-      final repo = WebsitesRepositoryImpl(localDatasource: datasource);
+    test(
+      '3. updateWebsite modifies existing record without creating duplicate',
+      () async {
+        await AppDatabase.instance.initCustom(inMemoryDatabasePath);
+        final datasource = LocalWebsitesDatasource();
+        final repo = WebsitesRepositoryImpl(localDatasource: datasource);
 
-      final now = DateTime.now();
-      final site = WebsiteModel(
-        domain: 'updatetest.com',
-        label: 'Original Label',
-        notes: 'Original note',
-        isCompetitor: false,
-        createdAt: now,
-        updatedAt: now,
-      );
-      final created = await repo.addWebsite(site);
-
-      final updated = created.copyWith(
-        label: 'Updated Brand Label',
-        notes: 'Updated note field',
-      );
-      await repo.updateWebsite(updated);
-
-      final list = await repo.getWebsites();
-      expect(list.length, 1);
-      expect(list.first.id, created.id);
-      expect(list.first.label, 'Updated Brand Label');
-      expect(list.first.notes, 'Updated note field');
-    });
-
-    test('4. deleteWebsite cascades and removes associated child keywords', () async {
-      await AppDatabase.instance.initCustom(inMemoryDatabasePath);
-      final websitesDs = LocalWebsitesDatasource();
-      final keywordsDs = LocalKeywordsDatasource();
-      final repo = WebsitesRepositoryImpl(localDatasource: websitesDs);
-
-      final now = DateTime.now();
-      final createdSite = await repo.addWebsite(
-        WebsiteModel(
-          domain: 'cascadetest.com',
-          label: 'Cascade Test',
+        final now = DateTime.now();
+        final site = WebsiteModel(
+          domain: 'updatetest.com',
+          label: 'Original Label',
+          notes: 'Original note',
+          isCompetitor: false,
           createdAt: now,
           updatedAt: now,
-        ),
-      );
+        );
+        final created = await repo.addWebsite(site);
 
-      final keyword = await keywordsDs.insertKeyword(
-        KeywordModel(
-          websiteId: createdSite.id!,
-          keywordText: 'seo tools',
-          createdAt: now,
-        ),
-      );
-      expect(keyword.id, isNotNull);
+        final updated = created.copyWith(
+          label: 'Updated Brand Label',
+          notes: 'Updated note field',
+        );
+        await repo.updateWebsite(updated);
 
-      // Verify keyword exists
-      var keywords = await keywordsDs.getKeywordsByWebsite(createdSite.id!);
-      expect(keywords.length, 1);
+        final list = await repo.getWebsites();
+        expect(list.length, 1);
+        expect(list.first.id, created.id);
+        expect(list.first.label, 'Updated Brand Label');
+        expect(list.first.notes, 'Updated note field');
+      },
+    );
 
-      // Delete website
-      await repo.deleteWebsite(createdSite.id!);
+    test(
+      '4. deleteWebsite cascades and removes associated child keywords',
+      () async {
+        await AppDatabase.instance.initCustom(inMemoryDatabasePath);
+        final websitesDs = LocalWebsitesDatasource();
+        final keywordsDs = LocalKeywordsDatasource();
+        final repo = WebsitesRepositoryImpl(localDatasource: websitesDs);
 
-      // Verify website deleted
-      final websites = await repo.getWebsites();
-      expect(websites.isEmpty, true);
+        final now = DateTime.now();
+        final createdSite = await repo.addWebsite(
+          WebsiteModel(
+            domain: 'cascadetest.com',
+            label: 'Cascade Test',
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
 
-      // Verify keywords cascade deleted
-      keywords = await keywordsDs.getKeywordsByWebsite(createdSite.id!);
-      expect(keywords.isEmpty, true);
-    });
+        final keyword = await keywordsDs.insertKeyword(
+          KeywordModel(
+            websiteId: createdSite.id!,
+            keywordText: 'seo tools',
+            createdAt: now,
+          ),
+        );
+        expect(keyword.id, isNotNull);
+
+        // Verify keyword exists
+        var keywords = await keywordsDs.getKeywordsByWebsite(createdSite.id!);
+        expect(keywords.length, 1);
+
+        // Delete website
+        await repo.deleteWebsite(createdSite.id!);
+
+        // Verify website deleted
+        final websites = await repo.getWebsites();
+        expect(websites.isEmpty, true);
+
+        // Verify keywords cascade deleted
+        keywords = await keywordsDs.getKeywordsByWebsite(createdSite.id!);
+        expect(keywords.isEmpty, true);
+      },
+    );
 
     test('5. data persists across database close and reopen', () async {
       final tempDir = Directory.systemTemp.createTempSync('rankscope_db_test_');

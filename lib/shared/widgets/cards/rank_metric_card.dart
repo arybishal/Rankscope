@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/spacing.dart';
@@ -50,16 +51,10 @@ class RankMetricCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            value,
-            style: AppTextStyles.metricLarge,
-          ),
+          Text(value, style: AppTextStyles.metricLarge),
           if (subtitle != null) ...[
             const SizedBox(height: AppSpacing.xs),
-            Text(
-              subtitle!,
-              style: AppTextStyles.bodySmall,
-            ),
+            Text(subtitle!, style: AppTextStyles.bodySmall),
           ],
         ],
       ),

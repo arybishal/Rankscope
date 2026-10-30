@@ -1,5 +1,7 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/security/secure_storage_service.dart';
 import '../models/gsc_metric_model.dart';
@@ -12,8 +14,8 @@ class RemoteGscDatasource {
   RemoteGscDatasource({
     http.Client? client,
     SecureStorageService? secureStorage,
-  })  : _client = client ?? http.Client(),
-        _secureStorage = secureStorage ?? SecureStorageService();
+  }) : _client = client ?? http.Client(),
+       _secureStorage = secureStorage ?? SecureStorageService();
 
   static const String _baseUrl = 'https://www.googleapis.com/webmasters/v3';
 
@@ -24,10 +26,7 @@ class RemoteGscDatasource {
 
     final response = await _client.get(
       url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      },
+      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
     );
 
     if (response.statusCode == 200) {
@@ -50,7 +49,7 @@ class RemoteGscDatasource {
     required int websiteId,
     required String siteUrl,
     required String startDate, // YYYY-MM-DD
-    required String endDate,   // YYYY-MM-DD
+    required String endDate, // YYYY-MM-DD
     int rowLimit = 5000,
   }) async {
     final token = await _getValidAccessToken();
@@ -108,7 +107,9 @@ class RemoteGscDatasource {
     }
 
     if (token == null) {
-      throw const AuthException('No valid Google Search Console authentication token available.');
+      throw const AuthException(
+        'No valid Google Search Console authentication token available.',
+      );
     }
 
     return token;
@@ -123,17 +124,21 @@ class RemoteGscDatasource {
     }
 
     final url = Uri.parse('https://oauth2.googleapis.com/token');
-    final response = await _client.post(url, body: {
-      'client_id': clientId,
-      'grant_type': 'refresh_token',
-      'refresh_token': refreshToken,
-    });
+    final response = await _client.post(
+      url,
+      body: {
+        'client_id': clientId,
+        'grant_type': 'refresh_token',
+        'refresh_token': refreshToken,
+      },
+    );
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body) as Map<String, dynamic>;
       final newAccessToken = data['access_token'] as String;
       final expiresIn = data['expires_in'] as int? ?? 3600;
-      final expiryEpochMs = DateTime.now().millisecondsSinceEpoch + (expiresIn * 1000);
+      final expiryEpochMs =
+          DateTime.now().millisecondsSinceEpoch + (expiresIn * 1000);
 
       await _secureStorage.saveGscAccessToken(newAccessToken, expiryEpochMs);
       return newAccessToken;

@@ -7,9 +7,11 @@ class LocalManualRankDatasource {
   final AppDatabase _dbManager;
 
   LocalManualRankDatasource({AppDatabase? dbManager})
-      : _dbManager = dbManager ?? AppDatabase.instance;
+    : _dbManager = dbManager ?? AppDatabase.instance;
 
-  Future<ManualRankRecordModel> insertRecord(ManualRankRecordModel model) async {
+  Future<ManualRankRecordModel> insertRecord(
+    ManualRankRecordModel model,
+  ) async {
     final db = await _dbManager.database;
     ManualRankRecordModel result = model;
 
@@ -54,7 +56,10 @@ class LocalManualRankDatasource {
     return result;
   }
 
-  Future<List<ManualRankRecordModel>> getHistoryForKeyword(int keywordId, {int limit = 50}) async {
+  Future<List<ManualRankRecordModel>> getHistoryForKeyword(
+    int keywordId, {
+    int limit = 50,
+  }) async {
     final db = await _dbManager.database;
     final results = await db.query(
       DatabaseConstants.tableManualRankRecords,
@@ -67,7 +72,10 @@ class LocalManualRankDatasource {
     return results.map((m) => ManualRankRecordModel.fromMap(m)).toList();
   }
 
-  Future<List<ManualRankRecordModel>> getLatestRecordsForWebsite(int websiteId, {int limit = 100}) async {
+  Future<List<ManualRankRecordModel>> getLatestRecordsForWebsite(
+    int websiteId, {
+    int limit = 100,
+  }) async {
     final db = await _dbManager.database;
     final results = await db.query(
       DatabaseConstants.tableManualRankRecords,

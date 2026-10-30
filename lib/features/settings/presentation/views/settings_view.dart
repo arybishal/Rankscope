@@ -78,14 +78,24 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     final key = _bingKeyController.text.trim();
     if (key.isNotEmpty) {
       await storage.saveBingApiKey(key);
-      await AppLogger.instance.info('Settings', 'bing_key_saved', 'Saved Bing API key in Android KeyStore');
+      await AppLogger.instance.info(
+        'Settings',
+        'bing_key_saved',
+        'Saved Bing API key in Android KeyStore',
+      );
     } else {
       await storage.clearBingCredentials();
-      await AppLogger.instance.info('Settings', 'bing_key_cleared', 'Cleared Bing API key');
+      await AppLogger.instance.info(
+        'Settings',
+        'bing_key_cleared',
+        'Cleared Bing API key',
+      );
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bing API credentials saved to Android KeyStore.')),
+        const SnackBar(
+          content: Text('Bing API credentials saved to Android KeyStore.'),
+        ),
       );
     }
   }
@@ -95,7 +105,11 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     final id = _gscClientController.text.trim();
     if (id.isNotEmpty) {
       await storage.saveGscClientId(id);
-      await AppLogger.instance.info('Settings', 'gsc_client_id_saved', 'Saved Google OAuth Client ID');
+      await AppLogger.instance.info(
+        'Settings',
+        'gsc_client_id_saved',
+        'Saved Google OAuth Client ID',
+      );
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -120,7 +134,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
             borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
             side: const BorderSide(color: AppColors.borderSubtle),
           ),
-          title: const Text('Export Complete Backup', style: AppTextStyles.titleLarge),
+          title: const Text(
+            'Export Complete Backup',
+            style: AppTextStyles.titleLarge,
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -140,12 +157,20 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.shield_outlined, size: 16, color: AppColors.rankGain),
+                      Icon(
+                        Icons.shield_outlined,
+                        size: 16,
+                        color: AppColors.rankGain,
+                      ),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Important: Losing this password means the backup cannot be restored.',
-                          style: TextStyle(fontSize: 11, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
@@ -158,7 +183,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   decoration: InputDecoration(
                     labelText: 'Backup Password',
                     suffixIcon: IconButton(
-                      icon: Icon(obscure ? Icons.visibility : Icons.visibility_off, size: 18),
+                      icon: Icon(
+                        obscure ? Icons.visibility : Icons.visibility_off,
+                        size: 18,
+                      ),
                       onPressed: () => setDialogState(() => obscure = !obscure),
                     ),
                   ),
@@ -227,7 +255,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Export failed: $e'), backgroundColor: AppColors.rankDrop),
+            SnackBar(
+              content: Text('Export failed: $e'),
+              backgroundColor: AppColors.rankDrop,
+            ),
           );
         }
       }
@@ -238,9 +269,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
 
   Future<void> _startImportBackup() async {
     try {
-      final files = await FilePicker.pickFiles(
-        type: FileType.any,
-      );
+      final files = await FilePicker.pickFiles(type: FileType.any);
 
       if (files.isEmpty || files.first.path == null) return;
       final filePath = files.first.path!;
@@ -260,7 +289,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
               borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
               side: const BorderSide(color: AppColors.borderSubtle),
             ),
-            title: const Text('Unlock Backup Archive', style: AppTextStyles.titleLarge),
+            title: const Text(
+              'Unlock Backup Archive',
+              style: AppTextStyles.titleLarge,
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,7 +309,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   decoration: InputDecoration(
                     labelText: 'Backup Password',
                     suffixIcon: IconButton(
-                      icon: Icon(obscure ? Icons.visibility : Icons.visibility_off, size: 18),
+                      icon: Icon(
+                        obscure ? Icons.visibility : Icons.visibility_off,
+                        size: 18,
+                      ),
                       onPressed: () => setDialogState(() => obscure = !obscure),
                     ),
                   ),
@@ -302,7 +337,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Decrypting and verifying backup integrity...')),
+        const SnackBar(
+          content: Text('Decrypting and verifying backup integrity...'),
+        ),
       );
 
       final service = ref.read(backupRestoreServiceProvider);
@@ -351,12 +388,31 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
               const SizedBox(height: AppSpacing.xs),
               const Text('Archive Contents:', style: AppTextStyles.labelLarge),
               const SizedBox(height: 6),
-              _previewRow(Icons.language, 'Websites', '${preview['websites_count']}'),
-              _previewRow(Icons.search, 'Keywords', '${preview['keywords_count']}'),
-              _previewRow(Icons.timeline, 'Ranking Records', '${preview['ranking_records_count']}'),
-              _previewRow(Icons.key, 'Stored Integrations', '${preview['integrations_count']}'),
+              _previewRow(
+                Icons.language,
+                'Websites',
+                '${preview['websites_count']}',
+              ),
+              _previewRow(
+                Icons.search,
+                'Keywords',
+                '${preview['keywords_count']}',
+              ),
+              _previewRow(
+                Icons.timeline,
+                'Ranking Records',
+                '${preview['ranking_records_count']}',
+              ),
+              _previewRow(
+                Icons.key,
+                'Stored Integrations',
+                '${preview['integrations_count']}',
+              ),
               const SizedBox(height: AppSpacing.md),
-              const Text('Select Restoration Mode:', style: AppTextStyles.labelLarge),
+              const Text(
+                'Select Restoration Mode:',
+                style: AppTextStyles.labelLarge,
+              ),
               const SizedBox(height: 8),
               _RestoreModeOption(
                 icon: Icons.restore_page_outlined,
@@ -416,7 +472,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Full restore completed successfully. All data and credentials restored.'),
+            content: Text(
+              'Full restore completed successfully. All data and credentials restored.',
+            ),
             backgroundColor: AppColors.rankGain,
           ),
         );
@@ -424,7 +482,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Full restore failed: $e'), backgroundColor: AppColors.rankDrop),
+          SnackBar(
+            content: Text('Full restore failed: $e'),
+            backgroundColor: AppColors.rankDrop,
+          ),
         );
       }
     }
@@ -445,7 +506,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Merged successfully: $sitesAdded websites, $kwsAdded keywords, $ranksAdded ranking records added.'),
+            content: Text(
+              'Merged successfully: $sitesAdded websites, $kwsAdded keywords, $ranksAdded ranking records added.',
+            ),
             backgroundColor: AppColors.rankGain,
           ),
         );
@@ -453,7 +516,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Merge failed: $e'), backgroundColor: AppColors.rankDrop),
+          SnackBar(
+            content: Text('Merge failed: $e'),
+            backgroundColor: AppColors.rankDrop,
+          ),
         );
       }
     }
@@ -464,15 +530,23 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     return Scaffold(
       backgroundColor: AppColors.surfacePrimary,
       appBar: AppBar(
-        title: const Text('Settings & Privacy', style: AppTextStyles.titleLarge),
+        title: const Text(
+          'Settings & Privacy',
+          style: AppTextStyles.titleLarge,
+        ),
       ),
       body: _isLoadingKeys
-          ? const Center(child: CircularProgressIndicator(color: AppColors.accent))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.accent),
+            )
           : ListView(
               padding: const EdgeInsets.all(AppSpacing.md),
               children: [
                 // Air-Gapped Encrypted Backup & Restore
-                const Text('DATA PERSISTENCE & BACKUP', style: AppTextStyles.labelSmall),
+                const Text(
+                  'DATA PERSISTENCE & BACKUP',
+                  style: AppTextStyles.labelSmall,
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
@@ -486,9 +560,16 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     children: [
                       const Row(
                         children: [
-                          Icon(Icons.lock_reset, size: 18, color: AppColors.accent),
+                          Icon(
+                            Icons.lock_reset,
+                            size: 18,
+                            color: AppColors.accent,
+                          ),
                           SizedBox(width: 8),
-                          Text('AES-256-GCM Encrypted Backups', style: AppTextStyles.labelLarge),
+                          Text(
+                            'AES-256-GCM Encrypted Backups',
+                            style: AppTextStyles.labelLarge,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -500,7 +581,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                         const SizedBox(height: 8),
                         Text(
                           'Last exported: ${DateFormat('yyyy-MM-dd HH:mm').format(_lastBackupDate!)}',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textTertiary,
+                          ),
                         ),
                       ],
                       const SizedBox(height: AppSpacing.md),
@@ -508,7 +592,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                         children: [
                           Expanded(
                             child: ElevatedButton.icon(
-                              icon: const Icon(Icons.file_upload_outlined, size: 16),
+                              icon: const Icon(
+                                Icons.file_upload_outlined,
+                                size: 16,
+                              ),
                               label: const Text('Export Backup'),
                               onPressed: _showExportBackupDialog,
                             ),
@@ -516,7 +603,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: OutlinedButton.icon(
-                              icon: const Icon(Icons.file_download_outlined, size: 16),
+                              icon: const Icon(
+                                Icons.file_download_outlined,
+                                size: 16,
+                              ),
                               label: const Text('Import Backup'),
                               onPressed: _startImportBackup,
                             ),
@@ -529,7 +619,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 const SizedBox(height: AppSpacing.lg),
 
                 // Logs & Diagnostics Section
-                const Text('DEVELOPMENT & TROUBLESHOOTING', style: AppTextStyles.labelSmall),
+                const Text(
+                  'DEVELOPMENT & TROUBLESHOOTING',
+                  style: AppTextStyles.labelSmall,
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 InkWell(
                   onTap: () async {
@@ -541,7 +634,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
                       color: AppColors.surfacePrimary,
-                      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.cardRadius,
+                      ),
                       border: Border.all(color: AppColors.borderSubtle),
                     ),
                     child: Row(
@@ -550,36 +645,62 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: AppColors.surfaceSecondary,
-                            borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.cardRadius,
+                            ),
                           ),
-                          child: const Icon(Icons.terminal, color: AppColors.textPrimary, size: 22),
+                          child: const Icon(
+                            Icons.terminal,
+                            color: AppColors.textPrimary,
+                            size: 22,
+                          ),
                         ),
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Logs & Diagnostics Center', style: AppTextStyles.labelLarge),
+                              const Text(
+                                'Logs & Diagnostics Center',
+                                style: AppTextStyles.labelLarge,
+                              ),
                               const SizedBox(height: 2),
                               Text(
                                 'View local audit logs, search events, export reports, and debug issues.',
-                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                               const SizedBox(height: 6),
                               Row(
                                 children: [
-                                  Text('$_totalLogCount entries', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+                                  Text(
+                                    '$_totalLogCount entries',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textTertiary,
+                                    ),
+                                  ),
                                   if (_logErrorCount > 0) ...[
                                     const SizedBox(width: 8),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 1,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: AppColors.rankDrop.withValues(alpha: 0.15),
+                                        color: AppColors.rankDrop.withValues(
+                                          alpha: 0.15,
+                                        ),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
                                         '$_logErrorCount errors',
-                                        style: const TextStyle(fontSize: 10, color: AppColors.rankDrop, fontWeight: FontWeight.bold),
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: AppColors.rankDrop,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -588,7 +709,11 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                             ],
                           ),
                         ),
-                        const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textTertiary),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 14,
+                          color: AppColors.textTertiary,
+                        ),
                       ],
                     ),
                   ),
@@ -596,7 +721,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 const SizedBox(height: AppSpacing.lg),
 
                 // Bing API Integration
-                const Text('BING WEBMASTER TOOLS (OPTIONAL)', style: AppTextStyles.labelSmall),
+                const Text(
+                  'BING WEBMASTER TOOLS (OPTIONAL)',
+                  style: AppTextStyles.labelSmall,
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
@@ -608,7 +736,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Bing Free API Key', style: AppTextStyles.labelLarge),
+                      const Text(
+                        'Bing Free API Key',
+                        style: AppTextStyles.labelLarge,
+                      ),
                       const SizedBox(height: 4),
                       const Text(
                         'Generate a free API key from your Bing Webmaster Tools portal (Settings > API Access). Stored securely in Android KeyStore.',
@@ -633,7 +764,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 const SizedBox(height: AppSpacing.lg),
 
                 // Google Search Console OAuth
-                const Text('GOOGLE SEARCH CONSOLE (OPTIONAL)', style: AppTextStyles.labelSmall),
+                const Text(
+                  'GOOGLE SEARCH CONSOLE (OPTIONAL)',
+                  style: AppTextStyles.labelSmall,
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
@@ -645,7 +779,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Google Cloud OAuth Client ID', style: AppTextStyles.labelLarge),
+                      const Text(
+                        'Google Cloud OAuth Client ID',
+                        style: AppTextStyles.labelLarge,
+                      ),
                       const SizedBox(height: 4),
                       const Text(
                         'Uses serverless OAuth 2.0 PKCE directly from your Android phone to Google. Zero intermediate server.',
@@ -669,7 +806,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 const SizedBox(height: AppSpacing.lg),
 
                 // Privacy Manifesto Summary
-                const Text('DATA SOVEREIGNTY & PRIVACY', style: AppTextStyles.labelSmall),
+                const Text(
+                  'DATA SOVEREIGNTY & PRIVACY',
+                  style: AppTextStyles.labelSmall,
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
@@ -683,9 +823,16 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     children: [
                       const Row(
                         children: [
-                          Icon(Icons.lock_outline, size: 18, color: AppColors.rankGain),
+                          Icon(
+                            Icons.lock_outline,
+                            size: 18,
+                            color: AppColors.rankGain,
+                          ),
                           SizedBox(width: 8),
-                          Text('100% Device-Only Privacy', style: AppTextStyles.labelLarge),
+                          Text(
+                            '100% Device-Only Privacy',
+                            style: AppTextStyles.labelLarge,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 8),

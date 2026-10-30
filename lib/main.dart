@@ -1,6 +1,8 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'app.dart';
 import 'core/database/app_database.dart';
 import 'core/logging/app_logger.dart';
@@ -32,11 +34,11 @@ void main() async {
 
   // Eagerly initialize SQLite database and apply any pending schema migrations
   await AppDatabase.instance.database;
-  await AppLogger.instance.info('App', 'app_started', 'RankScope engine initialized');
-
-  runApp(
-    const ProviderScope(
-      child: RankScopeApp(),
-    ),
+  await AppLogger.instance.info(
+    'App',
+    'app_started',
+    'RankScope engine initialized',
   );
+
+  runApp(const ProviderScope(child: RankScopeApp()));
 }

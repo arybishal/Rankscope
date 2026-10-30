@@ -47,7 +47,11 @@ class BingMetricModel extends BingMetric {
 
   /// Parses row from Bing GetQueryStats JSON:
   /// {"Query":"flutter seo","Clicks":12,"Impressions":240,"AvgClickPosition":4.2,"Date":"\/Date(1600000000000)\/"}
-  factory BingMetricModel.fromBingJson(Map<String, dynamic> json, int websiteId, DateTime syncedAt) {
+  factory BingMetricModel.fromBingJson(
+    Map<String, dynamic> json,
+    int websiteId,
+    DateTime syncedAt,
+  ) {
     final query = json['Query'] as String? ?? '';
     final clicks = json['Clicks'] as int? ?? 0;
     final impressions = json['Impressions'] as int? ?? 0;
@@ -61,12 +65,14 @@ class BingMetricModel extends BingMetric {
       if (match != null) {
         final ms = int.tryParse(match.group(0)!) ?? 0;
         final dt = DateTime.fromMillisecondsSinceEpoch(ms);
-        dateStr = "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+        dateStr =
+            "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
       }
     }
     if (dateStr.isEmpty) {
       final now = DateTime.now();
-      dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+      dateStr =
+          "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
     }
 
     return BingMetricModel(

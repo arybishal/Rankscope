@@ -5,7 +5,6 @@ import 'package:rankscope/core/theme/app_colors.dart';
 import 'package:rankscope/core/theme/app_text_styles.dart';
 import 'package:rankscope/core/theme/spacing.dart';
 import 'package:rankscope/core/utils/url_validator.dart';
-import 'package:rankscope/features/websites/domain/entities/website.dart';
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
 import 'package:rankscope/shared/widgets/buttons/app_primary_button.dart';
 import 'package:rankscope/shared/widgets/inputs/app_text_field.dart';
@@ -32,9 +31,15 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
   @override
   void initState() {
     super.initState();
-    _domainController = TextEditingController(text: widget.initialWebsite?.domain ?? '');
-    _labelController = TextEditingController(text: widget.initialWebsite?.label ?? '');
-    _notesController = TextEditingController(text: widget.initialWebsite?.notes ?? '');
+    _domainController = TextEditingController(
+      text: widget.initialWebsite?.domain ?? '',
+    );
+    _labelController = TextEditingController(
+      text: widget.initialWebsite?.label ?? '',
+    );
+    _notesController = TextEditingController(
+      text: widget.initialWebsite?.notes ?? '',
+    );
     _isCompetitor = widget.initialWebsite?.isCompetitor ?? false;
   }
 
@@ -50,9 +55,15 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSubmitting = true);
-    final normalizedDomain = UrlValidator.normalizeDomain(_domainController.text);
-    final label = _labelController.text.trim().isEmpty ? normalizedDomain : _labelController.text.trim();
-    final notes = _notesController.text.trim().isEmpty ? null : _notesController.text.trim();
+    final normalizedDomain = UrlValidator.normalizeDomain(
+      _domainController.text,
+    );
+    final label = _labelController.text.trim().isEmpty
+        ? normalizedDomain
+        : _labelController.text.trim();
+    final notes = _notesController.text.trim().isEmpty
+        ? null
+        : _notesController.text.trim();
 
     try {
       if (_isEditing) {
@@ -72,17 +83,21 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
           Navigator.of(context).pop(updated);
         }
       } else {
-        final created = await ref.read(websitesProvider.notifier).addWebsite(
-          domain: normalizedDomain,
-          label: label,
-          isCompetitor: _isCompetitor,
-          notes: notes,
-        );
+        final created = await ref
+            .read(websitesProvider.notifier)
+            .addWebsite(
+              domain: normalizedDomain,
+              label: label,
+              isCompetitor: _isCompetitor,
+              notes: notes,
+            );
 
         if (mounted) {
           setState(() => _isSubmitting = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Website "$label" registered successfully.')),
+            SnackBar(
+              content: Text('Website "$label" registered successfully.'),
+            ),
           );
           Navigator.of(context).pop(created);
         }
@@ -92,10 +107,7 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
         setState(() => _isSubmitting = false);
         final message = e is Failure ? e.message : 'Error: $e';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: AppColors.rankDrop,
-          ),
+          SnackBar(content: Text(message), backgroundColor: AppColors.rankDrop),
         );
       }
     }
@@ -125,9 +137,7 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  _isEditing
-                      ? 'Update website details, labels, or notes.'
-                      : 'Track your primary domain or monitor competitor search rankings.',
+                  _isEditing ? 'Update website details, labels, or notes.' : 'Track your primary domain or monitor competitor search rankings.',
                   style: AppTextStyles.bodySmall,
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -136,8 +146,12 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
                   label: 'Domain Name',
                   hintText: 'e.g. example.com or https://example.com',
                   validator: (val) {
-                    if (val == null || val.trim().isEmpty) return 'Please enter domain';
-                    if (!UrlValidator.isValidDomain(val)) return 'Invalid domain format';
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Please enter domain';
+                    }
+                    if (!UrlValidator.isValidDomain(val)) {
+                      return 'Invalid domain format';
+                    }
                     return null;
                   },
                 ),
@@ -159,9 +173,13 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
                     Checkbox(
                       value: _isCompetitor,
                       activeColor: AppColors.accent,
-                      onChanged: (val) => setState(() => _isCompetitor = val ?? false),
+                      onChanged: (val) =>
+                          setState(() => _isCompetitor = val ?? false),
                     ),
-                    const Text('This is a Competitor website', style: AppTextStyles.bodyMedium),
+                    const Text(
+                      'This is a Competitor website',
+                      style: AppTextStyles.bodyMedium,
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),

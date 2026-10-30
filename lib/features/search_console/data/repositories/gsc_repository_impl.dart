@@ -12,8 +12,8 @@ class GscRepositoryImpl implements GscRepository {
   GscRepositoryImpl({
     LocalGscDatasource? localDatasource,
     RemoteGscDatasource? remoteDatasource,
-  })  : _localDatasource = localDatasource ?? LocalGscDatasource(),
-        _remoteDatasource = remoteDatasource ?? RemoteGscDatasource();
+  }) : _localDatasource = localDatasource ?? LocalGscDatasource(),
+       _remoteDatasource = remoteDatasource ?? RemoteGscDatasource();
 
   @override
   Future<List<GscMetric>> getMetrics(

@@ -1,5 +1,7 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/security/secure_storage_service.dart';
 import '../models/bing_metric_model.dart';
@@ -12,8 +14,8 @@ class RemoteBingDatasource {
   RemoteBingDatasource({
     http.Client? client,
     SecureStorageService? secureStorage,
-  })  : _client = client ?? http.Client(),
-        _secureStorage = secureStorage ?? SecureStorageService();
+  }) : _client = client ?? http.Client(),
+       _secureStorage = secureStorage ?? SecureStorageService();
 
   static const String _baseUrl = 'https://ssl.bing.com/webmaster/api.svc/json';
 
@@ -30,7 +32,10 @@ class RemoteBingDatasource {
     if (response.statusCode == 200) {
       final data = json.decode(response.body) as Map<String, dynamic>;
       final list = data['d'] as List<dynamic>? ?? [];
-      return list.map((e) => e['Url'] as String).where((s) => s.isNotEmpty).toList();
+      return list
+          .map((e) => e['Url'] as String)
+          .where((s) => s.isNotEmpty)
+          .toList();
     } else {
       throw NetworkException(
         'Failed to query Bing Webmaster sites: ${response.body}',
@@ -50,7 +55,9 @@ class RemoteBingDatasource {
     }
 
     final encodedSite = Uri.encodeComponent(siteUrl);
-    final url = Uri.parse('$_baseUrl/GetQueryStats?siteUrl=$encodedSite&apikey=$apiKey');
+    final url = Uri.parse(
+      '$_baseUrl/GetQueryStats?siteUrl=$encodedSite&apikey=$apiKey',
+    );
 
     final response = await _client.get(url);
 
@@ -60,7 +67,11 @@ class RemoteBingDatasource {
       final now = DateTime.now();
 
       return list.map((item) {
-        return BingMetricModel.fromBingJson(item as Map<String, dynamic>, websiteId, now);
+        return BingMetricModel.fromBingJson(
+          item as Map<String, dynamic>,
+          websiteId,
+          now,
+        );
       }).toList();
     } else {
       throw NetworkException(

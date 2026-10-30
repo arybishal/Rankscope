@@ -13,15 +13,19 @@ final localGscDatasourceProvider = Provider<LocalGscDatasource>((ref) {
   return LocalGscDatasource();
 });
 
-final gscMetricsFutureProvider = FutureProvider.family<List<GscMetric>, int>((ref, websiteId) async {
+final gscMetricsFutureProvider = FutureProvider.family<List<GscMetric>, int>((
+  ref,
+  websiteId,
+) async {
   final ds = ref.watch(localGscDatasourceProvider);
   return await ds.getMetrics(websiteId, limit: 100);
 });
 
-final gscAggregatesFutureProvider = FutureProvider.family<Map<String, dynamic>, int>((ref, websiteId) async {
-  final ds = ref.watch(localGscDatasourceProvider);
-  return await ds.getAggregates(websiteId);
-});
+final gscAggregatesFutureProvider =
+    FutureProvider.family<Map<String, dynamic>, int>((ref, websiteId) async {
+      final ds = ref.watch(localGscDatasourceProvider);
+      return await ds.getAggregates(websiteId);
+    });
 
 class SearchConsoleView extends ConsumerWidget {
   const SearchConsoleView({super.key});
@@ -34,13 +38,19 @@ class SearchConsoleView extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.surfacePrimary,
       appBar: AppBar(
-        title: const Text('Google Search Console', style: AppTextStyles.titleLarge),
+        title: const Text(
+          'Google Search Console',
+          style: AppTextStyles.titleLarge,
+        ),
       ),
       body: websitesState.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.accent)),
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.accent),
+        ),
         error: (err, _) => Center(child: Text('Error: $err')),
         data: (websites) {
-          if (websites.isEmpty) {
+          final activeWebsite = websites.findActive(selectedSiteId);
+          if (activeWebsite == null) {
             return const EmptyStateView(
               icon: Icons.search,
               title: 'No Website Selected',
@@ -48,11 +58,12 @@ class SearchConsoleView extends ConsumerWidget {
             );
           }
 
-          final activeId = selectedSiteId ?? websites.first.id!;
-          final activeWebsite = websites.firstWhere((w) => w.id == activeId, orElse: () => websites.first);
-
-          final metricsAsync = ref.watch(gscMetricsFutureProvider(activeWebsite.id!));
-          final aggregatesAsync = ref.watch(gscAggregatesFutureProvider(activeWebsite.id!));
+          final metricsAsync = ref.watch(
+            gscMetricsFutureProvider(activeWebsite.id!),
+          );
+          final aggregatesAsync = ref.watch(
+            gscAggregatesFutureProvider(activeWebsite.id!),
+          );
 
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -68,12 +79,18 @@ class SearchConsoleView extends ConsumerWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.info_outline, size: 20, color: AppColors.textSecondary),
+                    const Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: AppColors.textSecondary,
+                    ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
                         'Google Search Console average position is a statistical aggregate computed over impressions and varies by personalization, date, and device. It is distinct from discrete point-in-time SERP rankings.',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
                   ],
@@ -83,7 +100,9 @@ class SearchConsoleView extends ConsumerWidget {
 
               // KPI Aggregates
               aggregatesAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator(color: AppColors.accent)),
+                loading: () => const Center(
+                  child: CircularProgressIndicator(color: AppColors.accent),
+                ),
                 error: (e, _) => Text('Error loading aggregates: $e'),
                 data: (agg) {
                   final clicks = agg['total_clicks'] as int? ?? 0;
@@ -95,17 +114,39 @@ class SearchConsoleView extends ConsumerWidget {
                     children: [
                       Row(
                         children: [
-                          Expanded(child: RankMetricCard(title: 'Clicks', value: '$clicks')),
+                          Expanded(
+                            child: RankMetricCard(
+                              title: 'Clicks',
+                              value: '$clicks',
+                            ),
+                          ),
                           const SizedBox(width: AppSpacing.sm),
-                          Expanded(child: RankMetricCard(title: 'Impressions', value: '$impressions')),
+                          Expanded(
+                            child: RankMetricCard(
+                              title: 'Impressions',
+                              value: '$impressions',
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Row(
                         children: [
-                          Expanded(child: RankMetricCard(title: 'Avg. CTR', value: '${(ctr * 100).toStringAsFixed(1)}%')),
+                          Expanded(
+                            child: RankMetricCard(
+                              title: 'Avg. CTR',
+                              value: '${(ctr * 100).toStringAsFixed(1)}%',
+                            ),
+                          ),
                           const SizedBox(width: AppSpacing.sm),
-                          Expanded(child: RankMetricCard(title: 'Avg. Position', value: avgPos > 0 ? avgPos.toStringAsFixed(1) : '—')),
+                          Expanded(
+                            child: RankMetricCard(
+                              title: 'Avg. Position',
+                              value: avgPos > 0
+                                  ? avgPos.toStringAsFixed(1)
+                                  : '—',
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -114,14 +155,19 @@ class SearchConsoleView extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
 
-              const Text('Top Search Queries', style: AppTextStyles.titleMedium),
+              const Text(
+                'Top Search Queries',
+                style: AppTextStyles.titleMedium,
+              ),
               const SizedBox(height: AppSpacing.sm),
 
               metricsAsync.when(
-                loading: () => const Center(child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(color: AppColors.accent),
-                )),
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: CircularProgressIndicator(color: AppColors.accent),
+                  ),
+                ),
                 error: (e, _) => Text('Error: $e'),
                 data: (metrics) {
                   if (metrics.isEmpty) {
@@ -129,14 +175,23 @@ class SearchConsoleView extends ConsumerWidget {
                       padding: const EdgeInsets.all(AppSpacing.lg),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceSecondary,
-                        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.cardRadius,
+                        ),
                         border: Border.all(color: AppColors.borderSubtle),
                       ),
                       child: const Column(
                         children: [
-                          Icon(Icons.cloud_sync_outlined, size: 40, color: AppColors.textTertiary),
+                          Icon(
+                            Icons.cloud_sync_outlined,
+                            size: 40,
+                            color: AppColors.textTertiary,
+                          ),
                           SizedBox(height: 8),
-                          Text('No Search Console Data Synced Yet', style: AppTextStyles.labelLarge),
+                          Text(
+                            'No Search Console Data Synced Yet',
+                            style: AppTextStyles.labelLarge,
+                          ),
                           SizedBox(height: 4),
                           Text(
                             'Connect your Google Search Console account via Settings to pull verified organic search queries without any middleman.',
@@ -152,14 +207,17 @@ class SearchConsoleView extends ConsumerWidget {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: metrics.length,
-                    separatorBuilder: (_, index) => const SizedBox(height: AppSpacing.xs),
+                    separatorBuilder: (_, index) =>
+                        const SizedBox(height: AppSpacing.xs),
                     itemBuilder: (context, index) {
                       final m = metrics[index];
                       return Container(
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
                           color: AppColors.surfacePrimary,
-                          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.cardRadius,
+                          ),
                           border: Border.all(color: AppColors.borderSubtle),
                         ),
                         child: Row(
@@ -168,18 +226,31 @@ class SearchConsoleView extends ConsumerWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(m.query, style: AppTextStyles.labelLarge),
+                                  Text(
+                                    m.query,
+                                    style: AppTextStyles.labelLarge,
+                                  ),
                                   const SizedBox(height: 2),
-                                  Text('${m.clicks} clicks • ${m.impressions} impr.', style: AppTextStyles.bodySmall),
+                                  Text(
+                                    '${m.clicks} clicks • ${m.impressions} impr.',
+                                    style: AppTextStyles.bodySmall,
+                                  ),
                                 ],
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppColors.surfaceSecondary,
-                                borderRadius: BorderRadius.circular(AppSpacing.badgeRadius),
-                                border: Border.all(color: AppColors.borderSubtle),
+                                borderRadius: BorderRadius.circular(
+                                  AppSpacing.badgeRadius,
+                                ),
+                                border: Border.all(
+                                  color: AppColors.borderSubtle,
+                                ),
                               ),
                               child: Text(
                                 'Avg #${m.averagePosition.toStringAsFixed(1)}',

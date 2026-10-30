@@ -6,11 +6,7 @@ void main() {
   group('RankingBadge Widget', () {
     testWidgets('renders unranked state when position is null', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: RankingBadge(position: null),
-          ),
-        ),
+        const MaterialApp(home: Scaffold(body: RankingBadge(position: null))),
       );
 
       expect(find.text('—'), findsOneWidget);
@@ -19,9 +15,7 @@ void main() {
     testWidgets('renders position and positive delta', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: RankingBadge(position: 3, delta: 2),
-          ),
+          home: Scaffold(body: RankingBadge(position: 3, delta: 2)),
         ),
       );
 
@@ -32,9 +26,7 @@ void main() {
     testWidgets('renders negative delta correctly', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: RankingBadge(position: 8, delta: -4),
-          ),
+          home: Scaffold(body: RankingBadge(position: 8, delta: -4)),
         ),
       );
 

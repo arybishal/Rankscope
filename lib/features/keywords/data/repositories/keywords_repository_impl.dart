@@ -2,21 +2,30 @@ import '../../../../core/errors/failures.dart';
 import '../../domain/entities/keyword.dart';
 import '../../domain/repositories/keywords_repository.dart';
 import '../datasources/local_keywords_datasource.dart';
-import '../models/keyword_model.dart';
 
 /// Implementation of [KeywordsRepository].
 class KeywordsRepositoryImpl implements KeywordsRepository {
   final LocalKeywordsDatasource _localDatasource;
 
   KeywordsRepositoryImpl({LocalKeywordsDatasource? localDatasource})
-      : _localDatasource = localDatasource ?? LocalKeywordsDatasource();
+    : _localDatasource = localDatasource ?? LocalKeywordsDatasource();
 
   @override
-  Future<List<Keyword>> getKeywordsByWebsite(int websiteId, {bool? isActive, String? tag}) async {
+  Future<List<Keyword>> getKeywordsByWebsite(
+    int websiteId, {
+    bool? isActive,
+    String? tag,
+  }) async {
     try {
-      return await _localDatasource.getKeywordsByWebsite(websiteId, isActive: isActive, tag: tag);
+      return await _localDatasource.getKeywordsByWebsite(
+        websiteId,
+        isActive: isActive,
+        tag: tag,
+      );
     } catch (e) {
-      throw DatabaseFailure('Failed to load keywords for website #$websiteId: $e');
+      throw DatabaseFailure(
+        'Failed to load keywords for website #$websiteId: $e',
+      );
     }
   }
 
@@ -32,8 +41,7 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
   @override
   Future<Keyword> addKeyword(Keyword keyword) async {
     try {
-      final model = KeywordModel.fromEntity(keyword);
-      return await _localDatasource.insertKeyword(model);
+      return await _localDatasource.insertKeyword(keyword);
     } catch (e) {
       throw DatabaseFailure('Failed to insert keyword: $e');
     }
@@ -42,8 +50,7 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
   @override
   Future<List<Keyword>> addKeywordsBatch(List<Keyword> keywords) async {
     try {
-      final models = keywords.map((k) => KeywordModel.fromEntity(k)).toList();
-      return await _localDatasource.insertKeywordsBatch(models);
+      return await _localDatasource.insertKeywordsBatch(keywords);
     } catch (e) {
       throw DatabaseFailure('Failed to batch insert keywords: $e');
     }
@@ -52,10 +59,9 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
   @override
   Future<void> updateKeyword(Keyword keyword) async {
     try {
-      final model = KeywordModel.fromEntity(keyword);
-      await _localDatasource.updateKeyword(model);
+      await _localDatasource.updateKeyword(keyword);
     } catch (e) {
-      throw DatabaseFailure('Failed to update keyword #$keyword.id: $e');
+      throw DatabaseFailure('Failed to update keyword #${keyword.id}: $e');
     }
   }
 

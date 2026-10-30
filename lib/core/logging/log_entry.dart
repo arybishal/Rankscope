@@ -58,7 +58,9 @@ class LogEntry {
 
   String toFormattedString() {
     final buffer = StringBuffer();
-    buffer.write('[${timestamp.toIso8601String()}] [${level.label}] [$module] $eventName: $message');
+    buffer.write(
+      '[${timestamp.toIso8601String()}] [${level.label}] [$module] $eventName: $message',
+    );
     if (details != null && details!.isNotEmpty) {
       buffer.write('\nDetails:\n$details');
     }

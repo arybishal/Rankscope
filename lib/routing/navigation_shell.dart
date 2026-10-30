@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/theme/app_colors.dart';
 
 /// Navigation shell providing the persistent bottom navigation bar for RankScope.
 class NavigationShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
 
-  const NavigationShell({
-    super.key,
-    required this.navigationShell,
-  });
+  const NavigationShell({super.key, required this.navigationShell});
 
   void _onTap(int index) {
     navigationShell.goBranch(
@@ -43,7 +41,10 @@ class NavigationShell extends StatelessWidget {
             ),
             NavigationDestination(
               icon: Icon(Icons.playlist_add_check_outlined),
-              selectedIcon: Icon(Icons.playlist_add_check, color: AppColors.accent),
+              selectedIcon: Icon(
+                Icons.playlist_add_check,
+                color: AppColors.accent,
+              ),
               label: 'SERP Audit',
             ),
             NavigationDestination(

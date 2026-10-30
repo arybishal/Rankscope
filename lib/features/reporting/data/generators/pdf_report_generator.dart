@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:rankscope/core/utils/date_formatter.dart';
@@ -17,13 +18,22 @@ class PdfReportGenerator {
 
     // Calculate executive KPIs
     final totalKeywords = keywords.length;
-    final rankedKeywords = keywords.where((k) => k.latestPosition != null).toList();
-    final top3Count = keywords.where((k) => (k.latestPosition ?? 101) <= 3).length;
-    final top10Count = keywords.where((k) => (k.latestPosition ?? 101) <= 10).length;
+    final rankedKeywords = keywords
+        .where((k) => k.latestPosition != null)
+        .toList();
+    final top3Count = keywords
+        .where((k) => (k.latestPosition ?? 101) <= 3)
+        .length;
+    final top10Count = keywords
+        .where((k) => (k.latestPosition ?? 101) <= 10)
+        .length;
 
     double avgPos = 0.0;
     if (rankedKeywords.isNotEmpty) {
-      final sum = rankedKeywords.fold<int>(0, (prev, k) => prev + k.latestPosition!);
+      final sum = rankedKeywords.fold<int>(
+        0,
+        (prev, k) => prev + k.latestPosition!,
+      );
       avgPos = sum / rankedKeywords.length;
     }
 
@@ -50,7 +60,10 @@ class PdfReportGenerator {
                     ),
                     pw.Text(
                       'Executive Organic Search Performance Audit',
-                      style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey700,
+                      ),
                     ),
                   ],
                 ),
@@ -59,11 +72,17 @@ class PdfReportGenerator {
                   children: [
                     pw.Text(
                       website.domain,
-                      style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
                     ),
                     pw.Text(
                       DateFormatter.toMedium(DateTime.now()),
-                      style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey600,
+                      ),
                     ),
                   ],
                 ),
@@ -81,7 +100,10 @@ class PdfReportGenerator {
                 pw.SizedBox(width: 12),
                 _buildKpiCard('Top 10 Positions', '$top10Count'),
                 pw.SizedBox(width: 12),
-                _buildKpiCard('Avg. Rank', avgPos > 0 ? avgPos.toStringAsFixed(1) : '—'),
+                _buildKpiCard(
+                  'Avg. Rank',
+                  avgPos > 0 ? avgPos.toStringAsFixed(1) : '—',
+                ),
               ],
             ),
             pw.SizedBox(height: 24),
@@ -96,20 +118,33 @@ class PdfReportGenerator {
             pw.TableHelper.fromTextArray(
               headers: ['Keyword', 'Rank', 'Delta', 'Location', 'Last Audited'],
               data: keywords.map((k) {
-                final rankStr = k.latestPosition != null ? '#${k.latestPosition}' : '—';
+                final rankStr = k.latestPosition != null
+                    ? '#${k.latestPosition}'
+                    : '—';
                 final deltaStr = k.positionDelta > 0
                     ? '+${k.positionDelta}'
                     : (k.positionDelta < 0 ? '${k.positionDelta}' : '0');
-                final locStr = k.targetCity != null ? '${k.targetCity}, ${k.targetCountry}' : k.targetCountry;
-                final dateStr = k.lastCheckedAt != null ? DateFormatter.toMedium(k.lastCheckedAt!) : 'Never';
+                final locStr = k.targetCity != null
+                    ? '${k.targetCity}, ${k.targetCountry}'
+                    : k.targetCountry;
+                final dateStr = k.lastCheckedAt != null
+                    ? DateFormatter.toMedium(k.lastCheckedAt!)
+                    : 'Never';
 
                 return [k.keywordText, rankStr, deltaStr, locStr, dateStr];
               }).toList(),
-              headerStyle: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+              headerStyle: pw.TextStyle(
+                fontSize: 10,
+                fontWeight: pw.FontWeight.bold,
+              ),
               cellStyle: const pw.TextStyle(fontSize: 9),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey100,
+              ),
               rowDecoration: const pw.BoxDecoration(
-                border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey200, width: 0.5)),
+                border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.grey200, width: 0.5),
+                ),
               ),
               cellAlignment: pw.Alignment.centerLeft,
             ),

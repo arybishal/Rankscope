@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/spacing.dart';
@@ -32,7 +33,9 @@ class AppPrimaryButton extends StatelessWidget {
             height: 18,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.surfacePrimary),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                AppColors.surfacePrimary,
+              ),
             ),
           ),
           const SizedBox(width: AppSpacing.sm),

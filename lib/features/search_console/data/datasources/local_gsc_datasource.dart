@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+
 import '../../../../core/constants/database_constants.dart';
 import '../../../../core/database/app_database.dart';
 import '../models/gsc_metric_model.dart';
@@ -8,7 +9,7 @@ class LocalGscDatasource {
   final AppDatabase _dbManager;
 
   LocalGscDatasource({AppDatabase? dbManager})
-      : _dbManager = dbManager ?? AppDatabase.instance;
+    : _dbManager = dbManager ?? AppDatabase.instance;
 
   Future<int> upsertMetricsBatch(List<GscMetricModel> models) async {
     final db = await _dbManager.database;
@@ -76,7 +77,8 @@ class LocalGscDatasource {
       whereArgs.add(endDate);
     }
 
-    final query = '''
+    final query =
+        '''
       SELECT 
         SUM(clicks) as total_clicks,
         SUM(impressions) as total_impressions,
@@ -101,7 +103,8 @@ class LocalGscDatasource {
       'total_clicks': row['total_clicks'] as int? ?? 0,
       'total_impressions': row['total_impressions'] as int? ?? 0,
       'avg_ctr': (row['avg_ctr'] as num?)?.toDouble() ?? 0.0,
-      'overall_avg_position': (row['overall_avg_position'] as num?)?.toDouble() ?? 0.0,
+      'overall_avg_position':
+          (row['overall_avg_position'] as num?)?.toDouble() ?? 0.0,
     };
   }
 }

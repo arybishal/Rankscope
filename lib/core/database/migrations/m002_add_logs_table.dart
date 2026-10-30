@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+
 import 'migration.dart';
 
 /// Migration 002: Add central diagnostic logging table and query indexes.

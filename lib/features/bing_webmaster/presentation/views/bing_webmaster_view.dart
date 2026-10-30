@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:rankscope/core/theme/app_colors.dart';
 import 'package:rankscope/core/theme/app_text_styles.dart';
 import 'package:rankscope/core/theme/spacing.dart';
@@ -83,10 +84,13 @@ class BingWebmasterView extends ConsumerWidget {
               }
 
               return IconButton(
-                icon: const Icon(Icons.sync),
-                tooltip: 'Sync Bing Data',
-                onPressed: () =>
-                    _handleSync(context, ref, active.id!, active.domain),
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh Status',
+                onPressed: () {
+                  ref
+                      .read(bingSyncNotifierProvider.notifier)
+                      .refreshStatus(active.domain);
+                },
               );
             },
             orElse: () => const SizedBox.shrink(),
@@ -108,54 +112,126 @@ class BingWebmasterView extends ConsumerWidget {
             );
           }
 
+          final statusAsync = ref.watch(
+            bingPropertyStatusProvider(activeWebsite.domain),
+          );
           final metricsAsync = ref.watch(
             bingMetricsFutureProvider(activeWebsite.id!),
           );
 
           return RefreshIndicator(
             color: AppColors.accent,
-            onRefresh: () => _handleSync(
-              context,
-              ref,
-              activeWebsite.id!,
-              activeWebsite.domain,
-            ),
+            onRefresh: () async {
+              ref
+                  .read(bingSyncNotifierProvider.notifier)
+                  .refreshStatus(activeWebsite.domain);
+              await ref
+                  .read(bingSyncNotifierProvider.notifier)
+                  .syncWebsite(activeWebsite.id!, activeWebsite.domain);
+            },
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.md),
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceSecondary,
-                    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                    border: Border.all(color: AppColors.borderSubtle),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.vpn_key_outlined,
-                        size: 20,
-                        color: AppColors.textSecondary,
+                // Active Website Switcher Banner
+                _ActiveWebsiteHeader(
+                  activeWebsite: activeWebsite,
+                  allWebsites: websites,
+                ),
+                const SizedBox(height: AppSpacing.md),
+
+                // Bing Property Status Banner
+                statusAsync.when(
+                  loading: () => Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceSecondary,
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.cardRadius,
                       ),
-                      SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          'Bing Webmaster Tools uses your free personal API key generated directly from Microsoft Bing Webmaster portal.',
-                          style: AppTextStyles.bodySmall,
+                      border: Border.all(color: AppColors.borderSubtle),
+                    ),
+                    child: const Row(
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.accent,
+                          ),
                         ),
-                      ),
-                    ],
+                        SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            'Verifying Bing property status...',
+                            style: AppTextStyles.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  error: (e, _) => _StatusCard(
+                    status: BingVerificationStatus.connectionUnavailable,
+                    title: 'Verification Check Failed',
+                    subtitle: e.toString(),
+                    onRetry: () {
+                      ref
+                          .read(bingSyncNotifierProvider.notifier)
+                          .refreshStatus(activeWebsite.domain);
+                    },
+                  ),
+                  data: (matchResult) {
+                    return _BingStatusBanner(
+                      activeWebsite: activeWebsite,
+                      matchResult: matchResult,
+                      isSyncing: syncState.isSyncing,
+                      onSync: () => _handleSync(
+                        context,
+                        ref,
+                        activeWebsite.id!,
+                        activeWebsite.domain,
+                      ),
+                      onRefresh: () {
+                        ref
+                            .read(bingSyncNotifierProvider.notifier)
+                            .refreshStatus(activeWebsite.domain);
+                      },
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
-                const Text(
-                  'Bing Search Query Insights',
-                  style: AppTextStyles.titleMedium,
+                // Bing Search Query Insights Section Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Bing Search Query Insights',
+                      style: AppTextStyles.titleMedium,
+                    ),
+                    statusAsync.maybeWhen(
+                      data: (res) => res.isSyncAllowed
+                          ? TextButton.icon(
+                              onPressed: syncState.isSyncing
+                                  ? null
+                                  : () => _handleSync(
+                                      context,
+                                      ref,
+                                      activeWebsite.id!,
+                                      activeWebsite.domain,
+                                    ),
+                              icon: const Icon(Icons.sync, size: 16),
+                              label: const Text('Sync Now'),
+                            )
+                          : const SizedBox.shrink(),
+                      orElse: () => const SizedBox.shrink(),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
 
+                // Metrics List
                 metricsAsync.when(
                   loading: () => const Center(
                     child: Padding(
@@ -194,25 +270,42 @@ class BingWebmasterView extends ConsumerWidget {
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Text(
-                              'Add your Bing Webmaster API Key in Settings to ingest impressions and rankings for ${activeWebsite.domain}.',
+                              'Sync rankings and performance data directly from Bing Webmaster Tools for ${activeWebsite.domain}.',
                               textAlign: TextAlign.center,
                               style: AppTextStyles.bodySmall,
                             ),
                             const SizedBox(height: AppSpacing.md),
-                            AppPrimaryButton(
-                              label: 'Sync with Bing',
-                              icon: const Icon(
-                                Icons.sync,
-                                size: 18,
-                                color: AppColors.surfacePrimary,
-                              ),
-                              isLoading: syncState.isSyncing,
-                              onPressed: () => _handleSync(
-                                context,
-                                ref,
-                                activeWebsite.id!,
-                                activeWebsite.domain,
-                              ),
+                            statusAsync.maybeWhen(
+                              data: (res) => res.isSyncAllowed
+                                  ? AppPrimaryButton(
+                                      label: 'Sync with Bing',
+                                      icon: const Icon(
+                                        Icons.sync,
+                                        size: 18,
+                                        color: AppColors.surfacePrimary,
+                                      ),
+                                      isLoading: syncState.isSyncing,
+                                      onPressed: () => _handleSync(
+                                        context,
+                                        ref,
+                                        activeWebsite.id!,
+                                        activeWebsite.domain,
+                                      ),
+                                    )
+                                  : OutlinedButton.icon(
+                                      icon: const Icon(Icons.refresh, size: 16),
+                                      label: const Text('Recheck Bing Status'),
+                                      onPressed: () {
+                                        ref
+                                            .read(
+                                              bingSyncNotifierProvider.notifier,
+                                            )
+                                            .refreshStatus(
+                                              activeWebsite.domain,
+                                            );
+                                      },
+                                    ),
+                              orElse: () => const SizedBox.shrink(),
                             ),
                           ],
                         ),
@@ -248,7 +341,7 @@ class BingWebmasterView extends ConsumerWidget {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${m.clicks} clicks • ${m.impressions} impr.',
+                                      '${m.clicks} clicks • ${m.impressions} impr. • ${(m.ctr * 100).toStringAsFixed(1)}% CTR',
                                       style: AppTextStyles.bodySmall,
                                     ),
                                   ],
@@ -284,6 +377,421 @@ class BingWebmasterView extends ConsumerWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _ActiveWebsiteHeader extends ConsumerWidget {
+  final Website activeWebsite;
+  final List<Website> allWebsites;
+
+  const _ActiveWebsiteHeader({
+    required this.activeWebsite,
+    required this.allWebsites,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSecondary,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: activeWebsite.id,
+          isExpanded: true,
+          dropdownColor: AppColors.surfacePrimary,
+          items: allWebsites.map((w) {
+            return DropdownMenuItem<int>(
+              value: w.id,
+              child: Row(
+                children: [
+                  Icon(
+                    w.isCompetitor
+                        ? Icons.shield_outlined
+                        : Icons.check_circle_outline,
+                    size: 16,
+                    color: w.isCompetitor
+                        ? AppColors.rankDrop
+                        : AppColors.rankGain,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      w.label,
+                      style: AppTextStyles.labelLarge,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      '(${w.domain})',
+                      style: AppTextStyles.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (newId) {
+            if (newId != null) {
+              ref.read(selectedWebsiteIdProvider.notifier).select(newId);
+            }
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _BingStatusBanner extends StatelessWidget {
+  final Website activeWebsite;
+  final BingPropertyMatchResult matchResult;
+  final bool isSyncing;
+  final VoidCallback onSync;
+  final VoidCallback onRefresh;
+
+  const _BingStatusBanner({
+    required this.activeWebsite,
+    required this.matchResult,
+    required this.isSyncing,
+    required this.onSync,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    switch (matchResult.status) {
+      case BingVerificationStatus.verifiedAndMatched:
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0FDF4), // light subtle green
+            borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+            border: Border.all(color: const Color(0xFFBBF7D0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.verified,
+                    size: 20,
+                    color: AppColors.rankGain,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  const Text(
+                    'Verified and Matched',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF166534),
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 16),
+                    tooltip: 'Refresh Status',
+                    onPressed: onRefresh,
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Matched Property: ${matchResult.matchedBingUrl ?? activeWebsite.domain}',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF15803D)),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              SizedBox(
+                width: double.infinity,
+                child: AppPrimaryButton(
+                  label: isSyncing ? 'Syncing...' : 'Sync Search Analytics',
+                  icon: const Icon(
+                    Icons.cloud_sync_outlined,
+                    size: 18,
+                    color: AppColors.surfacePrimary,
+                  ),
+                  isLoading: isSyncing,
+                  onPressed: onSync,
+                ),
+              ),
+            ],
+          ),
+        );
+
+      case BingVerificationStatus.locallyAddedNotVerified:
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFBEB), // subtle amber
+            borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+            border: Border.all(color: const Color(0xFFFDE68A)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.pending_actions_outlined,
+                    size: 20,
+                    color: Color(0xFFD97706),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  const Expanded(
+                    child: Text(
+                      'Added Locally, Not Verified in Bing',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF92400E),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 16),
+                    tooltip: 'Recheck Verification',
+                    onPressed: onRefresh,
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Property "${matchResult.matchedBingUrl}" is listed in your Bing Webmaster account, but ownership verification is pending in Bing.',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF78350F)),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Check Verification Status'),
+              ),
+            ],
+          ),
+        );
+
+      case BingVerificationStatus.propertyNotFound:
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSecondary,
+            borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+            border: Border.all(color: AppColors.borderSubtle),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.search_off_outlined,
+                    size: 20,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  const Expanded(
+                    child: Text(
+                      'Bing Property Not Found',
+                      style: AppTextStyles.labelLarge,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 16),
+                    tooltip: 'Refresh Properties',
+                    onPressed: onRefresh,
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Domain "${activeWebsite.domain}" does not match any registered site in your Bing Webmaster account.',
+                style: AppTextStyles.bodySmall,
+              ),
+              if (matchResult.availableProperties.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                const Text(
+                  'Sites registered in your Bing account:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ...matchResult.availableProperties.map(
+                  (prop) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Icon(
+                          prop.isVerified
+                              ? Icons.check_circle_outline
+                              : Icons.schedule,
+                          size: 14,
+                          color: prop.isVerified
+                              ? AppColors.rankGain
+                              : const Color(0xFFD97706),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            prop.url,
+                            style: AppTextStyles.bodySmall,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          prop.isVerified ? 'Verified' : 'Unverified',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: prop.isVerified
+                                ? AppColors.rankGain
+                                : const Color(0xFFD97706),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Refresh Bing Sites'),
+              ),
+            ],
+          ),
+        );
+
+      case BingVerificationStatus.authFailed:
+        return _StatusCard(
+          status: matchResult.status,
+          title: 'Authentication Failed',
+          subtitle:
+              matchResult.errorMessage ??
+              'Your Bing API key is invalid or unauthorized.',
+          actionLabel: 'Open Settings',
+          onAction: () => context.push('/settings'),
+        );
+
+      case BingVerificationStatus.connectionUnavailable:
+        return _StatusCard(
+          status: matchResult.status,
+          title: 'Connection Unavailable',
+          subtitle: matchResult.errorMessage ?? 'Unable to connect to Bing Webmaster Tools. Check your internet connection.',
+          onRetry: onRefresh,
+        );
+
+      case BingVerificationStatus.notConfigured:
+        return _StatusCard(
+          status: matchResult.status,
+          title: 'Bing API Key Not Configured',
+          subtitle: 'Add your personal Bing Webmaster API key in Settings to inspect search rankings and performance.',
+          actionLabel: 'Configure in Settings',
+          onAction: () => context.push('/settings'),
+        );
+    }
+  }
+}
+
+class _StatusCard extends StatelessWidget {
+  final BingVerificationStatus status;
+  final String title;
+  final String subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final VoidCallback? onRetry;
+
+  const _StatusCard({
+    required this.status,
+    required this.title,
+    required this.subtitle,
+    this.actionLabel,
+    this.onAction,
+    this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color borderColor = AppColors.borderSubtle;
+    Color bgColor = AppColors.surfaceSecondary;
+    IconData iconData = Icons.info_outline;
+    Color iconColor = AppColors.textSecondary;
+
+    if (status == BingVerificationStatus.authFailed) {
+      borderColor = const Color(0xFFFECACA);
+      bgColor = const Color(0xFFFEF2F2);
+      iconData = Icons.lock_outline;
+      iconColor = AppColors.rankDrop;
+    } else if (status == BingVerificationStatus.connectionUnavailable) {
+      borderColor = AppColors.borderSubtle;
+      bgColor = AppColors.surfaceSecondary;
+      iconData = Icons.cloud_off_outlined;
+      iconColor = AppColors.textSecondary;
+    } else if (status == BingVerificationStatus.notConfigured) {
+      borderColor = AppColors.borderSubtle;
+      bgColor = AppColors.surfaceSecondary;
+      iconData = Icons.vpn_key_outlined;
+      iconColor = AppColors.accent;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(iconData, size: 20, color: iconColor),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: status == BingVerificationStatus.authFailed
+                        ? AppColors.rankDrop
+                        : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (onRetry != null)
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 16),
+                  onPressed: onRetry,
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(subtitle, style: AppTextStyles.bodySmall),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/logging/log_sanitizer.dart';
 import '../../../../core/security/secure_storage_service.dart';
+import '../../domain/entities/bing_site_property.dart';
 import '../models/bing_metric_model.dart';
 
 /// Direct HTTPS client for official Bing Webmaster Tools REST API.
@@ -23,8 +24,8 @@ class RemoteBingDatasource {
   static const String _baseUrl = 'https://ssl.bing.com/webmaster/api.svc/json';
   static const Duration _timeout = Duration(seconds: 15);
 
-  /// Verifies API Key and retrieves user sites.
-  Future<List<String>> getUserSites() async {
+  /// Retrieves all site properties registered in Bing Webmaster Tools with verification status.
+  Future<List<BingSiteProperty>> getUserSiteProperties() async {
     final apiKey = await _secureStorage.getBingApiKey();
     if (apiKey == null || apiKey.trim().isEmpty) {
       throw const AuthException('Bing Webmaster API key is not configured.');
@@ -40,8 +41,9 @@ class RemoteBingDatasource {
         final data = json.decode(response.body) as Map<String, dynamic>;
         final list = data['d'] as List<dynamic>? ?? [];
         return list
-            .map((e) => (e as Map<String, dynamic>)['Url'] as String? ?? '')
-            .where((s) => s.isNotEmpty)
+            .whereType<Map<String, dynamic>>()
+            .map((e) => BingSiteProperty.fromJson(e))
+            .where((p) => p.url.isNotEmpty)
             .toList();
       } else {
         _handleErrorResponse('GetUserSites', response);
@@ -56,6 +58,12 @@ class RemoteBingDatasource {
     } on http.ClientException catch (e) {
       throw NetworkException('HTTP client error: ${e.message}');
     }
+  }
+
+  /// Verifies API Key and retrieves user site URLs.
+  Future<List<String>> getUserSites() async {
+    final properties = await getUserSiteProperties();
+    return properties.map((p) => p.url).toList();
   }
 
   /// Fetches query stats for a verified site url.

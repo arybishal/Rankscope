@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:rankscope/core/theme/app_colors.dart';
 import 'package:rankscope/core/theme/app_text_styles.dart';
@@ -31,6 +32,14 @@ class DashboardView extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('RankScope', style: AppTextStyles.titleLarge),
         actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.language_outlined,
+              color: AppColors.textPrimary,
+            ),
+            tooltip: 'Manage Websites',
+            onPressed: () => context.push('/websites'),
+          ),
           IconButton(
             icon: const Icon(
               Icons.add_circle_outline,

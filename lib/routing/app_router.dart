@@ -7,6 +7,7 @@ import '../features/manual_tracking/presentation/views/manual_tracking_view.dart
 import '../features/search_console/presentation/views/search_console_view.dart';
 import '../features/settings/presentation/views/logs_view.dart';
 import '../features/settings/presentation/views/settings_view.dart';
+import '../features/websites/presentation/views/websites_management_view.dart';
 import 'navigation_shell.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -20,6 +21,11 @@ final GoRouter appRouter = GoRouter(
       path: '/logs',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const LogsView(),
+    ),
+    GoRoute(
+      path: '/websites',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const WebsitesManagementView(),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {

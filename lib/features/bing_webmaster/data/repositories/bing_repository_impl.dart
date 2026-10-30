@@ -1,8 +1,8 @@
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/logging/app_logger.dart';
-import '../../domain/entities/bing_metric.dart';
 import '../../domain/repositories/bing_repository.dart';
+import '../../domain/utils/bing_property_matcher.dart';
 import '../datasources/local_bing_datasource.dart';
 import '../datasources/remote_bing_datasource.dart';
 
@@ -33,7 +33,7 @@ class BingRepositoryImpl implements BingRepository {
       await AppLogger.instance.info(
         'BingRepository',
         'sites_retrieved',
-        'Retrieved ${sites.length} verified site(s) from Bing Webmaster API',
+        'Retrieved ${sites.length} site(s) from Bing Webmaster API',
       );
       return sites;
     } on AuthException catch (e) {
@@ -56,7 +56,76 @@ class BingRepositoryImpl implements BingRepository {
         'unexpected_error',
         '$e',
       );
-      throw NetworkFailure('Failed to retrieve verified sites from Bing: $e');
+      throw NetworkFailure('Failed to retrieve sites from Bing: $e');
+    }
+  }
+
+  @override
+  Future<List<BingSiteProperty>> getSiteProperties() async {
+    try {
+      final properties = await _remoteDatasource.getUserSiteProperties();
+      await AppLogger.instance.info(
+        'BingRepository',
+        'properties_retrieved',
+        'Retrieved ${properties.length} property item(s) from Bing Webmaster API',
+      );
+      return properties;
+    } on AuthException catch (e) {
+      await AppLogger.instance.warning(
+        'BingRepository',
+        'auth_failed',
+        e.message,
+      );
+      throw AuthenticationFailure(e.message);
+    } on NetworkException catch (e) {
+      await AppLogger.instance.error(
+        'BingRepository',
+        'network_failed',
+        e.message,
+      );
+      throw NetworkFailure(e.message);
+    } catch (e) {
+      await AppLogger.instance.error(
+        'BingRepository',
+        'unexpected_error',
+        '$e',
+      );
+      throw NetworkFailure('Failed to retrieve site properties from Bing: $e');
+    }
+  }
+
+  @override
+  Future<BingPropertyMatchResult> checkPropertyStatus(
+    String localDomain,
+  ) async {
+    try {
+      final properties = await _remoteDatasource.getUserSiteProperties();
+      return BingPropertyMatcher.match(
+        localDomain: localDomain,
+        bingProperties: properties,
+      );
+    } on AuthException catch (e) {
+      final msg = e.message;
+      if (msg.toLowerCase().contains('not configured')) {
+        return BingPropertyMatchResult(
+          status: BingVerificationStatus.notConfigured,
+          errorMessage: msg,
+        );
+      }
+      return BingPropertyMatchResult(
+        status: BingVerificationStatus.authFailed,
+        errorMessage: msg,
+      );
+    } on NetworkException catch (e) {
+      return BingPropertyMatchResult(
+        status: BingVerificationStatus.connectionUnavailable,
+        errorMessage: e.message,
+      );
+    } catch (e) {
+      return BingPropertyMatchResult(
+        status: BingVerificationStatus.connectionUnavailable,
+        errorMessage: 'Connection failed: $e',
+      );
     }
   }
 
@@ -66,48 +135,51 @@ class BingRepositoryImpl implements BingRepository {
     required String siteUrl,
   }) async {
     try {
-      // 1. Retrieve registered sites from Bing account to find canonical match
-      final verifiedSites = await _remoteDatasource.getUserSites();
+      // 1. Verify property verification status with Bing account
+      final matchResult = await checkPropertyStatus(siteUrl);
 
-      final normalizedTarget = siteUrl
-          .replaceAll('https://', '')
-          .replaceAll('http://', '')
-          .replaceAll('/', '')
-          .trim()
-          .toLowerCase();
-
-      String? matchedUrl;
-      for (final s in verifiedSites) {
-        final normalizedS = s
-            .replaceAll('https://', '')
-            .replaceAll('http://', '')
-            .replaceAll('/', '')
-            .trim()
-            .toLowerCase();
-        if (normalizedS == normalizedTarget ||
-            normalizedS == 'www.$normalizedTarget' ||
-            'www.$normalizedS' == normalizedTarget) {
-          matchedUrl = s;
-          break;
+      if (!matchResult.isSyncAllowed) {
+        switch (matchResult.status) {
+          case BingVerificationStatus.notConfigured:
+            throw const AuthenticationFailure(
+              'Bing API Key is not configured. Please add your key in Settings.',
+            );
+          case BingVerificationStatus.authFailed:
+            throw AuthenticationFailure(
+              matchResult.errorMessage ?? 'Bing authentication failed.',
+            );
+          case BingVerificationStatus.locallyAddedNotVerified:
+            throw ValidationFailure(
+              'Website "$siteUrl" exists in Bing Webmaster, but domain verification is still pending. Complete verification in the Bing portal.',
+            );
+          case BingVerificationStatus.propertyNotFound:
+            throw ValidationFailure(
+              'Website "$siteUrl" was not found in your Bing Webmaster account. Add and verify this property in Bing first.',
+            );
+          case BingVerificationStatus.connectionUnavailable:
+            throw NetworkFailure(
+              matchResult.errorMessage ??
+                  'Network connection to Bing Webmaster Tools failed.',
+            );
+          case BingVerificationStatus.verifiedAndMatched:
+            break;
         }
       }
 
-      // If matched, use the exact registered URL in Bing; otherwise fallback to HTTPS
-      final targetUrl =
-          matchedUrl ??
-          (siteUrl.startsWith('http') ? siteUrl : 'https://$siteUrl/');
+      // 2. Use the exact compatible URL returned by Bing Webmaster
+      final compatibleTargetUrl = matchResult.matchedBingUrl!;
 
-      // 2. Query stats from Bing API
+      // 3. Query stats from Bing API
       final remoteRows = await _remoteDatasource.getQueryStats(
         websiteId: websiteId,
-        siteUrl: targetUrl,
+        siteUrl: compatibleTargetUrl,
       );
 
       if (remoteRows.isEmpty) {
         await AppLogger.instance.info(
           'BingRepository',
           'sync_empty',
-          'Bing API returned 0 query stats for $targetUrl',
+          'Bing API returned 0 query stats for $compatibleTargetUrl',
         );
         return 0;
       }
@@ -116,9 +188,11 @@ class BingRepositoryImpl implements BingRepository {
       await AppLogger.instance.info(
         'BingRepository',
         'sync_success',
-        'Successfully synced $count Bing query metrics for $targetUrl',
+        'Successfully synced $count Bing query metrics for $compatibleTargetUrl',
       );
       return count;
+    } on Failure {
+      rethrow;
     } on AuthException catch (e) {
       await AppLogger.instance.warning(
         'BingRepository',

@@ -52,30 +52,67 @@ class _FakeLocalBingDatasource extends LocalBingDatasource {
   }
 }
 
+class _MockBingRepository implements BingRepository {
+  final BingPropertyMatchResult matchResult;
+  final List<BingMetric> metrics;
+
+  _MockBingRepository({required this.matchResult, this.metrics = const []});
+
+  @override
+  Future<List<BingMetric>> getMetrics(int websiteId, {int limit = 100}) async =>
+      metrics;
+
+  @override
+  Future<List<String>> getVerifiedSites() async =>
+      matchResult.availableProperties.map((p) => p.url).toList();
+
+  @override
+  Future<List<BingSiteProperty>> getSiteProperties() async =>
+      matchResult.availableProperties;
+
+  @override
+  Future<BingPropertyMatchResult> checkPropertyStatus(
+    String localDomain,
+  ) async => matchResult;
+
+  @override
+  Future<int> syncMetricsFromApi({
+    required int websiteId,
+    required String siteUrl,
+  }) async {
+    if (!matchResult.isSyncAllowed) {
+      throw ValidationFailure(
+        matchResult.errorMessage ?? 'Sync not allowed for unverified property',
+      );
+    }
+    return metrics.length;
+  }
+}
+
 void main() {
   setUpAll(() {
     setupSqfliteFfi();
   });
 
   const dummyApiKey = 'test_bing_api_key_valid';
-  const siteUrl = 'https://techinfonepal.com/';
+  const siteUrl = 'https://example.com/';
 
   group('1. Bing Model & Data Parsing Tests', () {
     test(
       'Correctly parses and scales Bing position values by factor of 10',
       () {
         final json = {
-          'Query': 'nepal tech news',
+          'Query': 'flutter ranking tracker',
           'Clicks': 25,
           'Impressions': 500,
-          'AvgImpressionPosition': 42, // should scale to 4.2
+          'AvgImpressionPosition': 42, // scales to 4.2
           'AvgClickPosition': 38,
           'Date': '/Date(1672531199000)/',
         };
 
         final metric = BingMetricModel.fromBingJson(json, 1, DateTime.now());
 
-        expect(metric.query, 'nepal tech news');
+        expect(metric.query, 'flutter ranking tracker');
         expect(metric.clicks, 25);
         expect(metric.impressions, 500);
         expect(metric.ctr, closeTo(0.05, 0.001));
@@ -85,7 +122,7 @@ void main() {
 
     test('Falls back to AvgClickPosition when AvgImpressionPosition is 0', () {
       final json = {
-        'Query': 'flutter ranking tracker',
+        'Query': 'best seo tool',
         'Clicks': 5,
         'Impressions': 50,
         'AvgImpressionPosition': 0,
@@ -98,7 +135,7 @@ void main() {
 
     test('Handles zero clicks and zero position gracefully', () {
       final json = {
-        'Query': 'unknown search',
+        'Query': 'unknown query',
         'Clicks': 0,
         'Impressions': 0,
         'AvgImpressionPosition': -1,
@@ -119,14 +156,14 @@ void main() {
         secureStorage: _MockSecureStorage(initialKey: null),
       );
 
-      expect(() => ds.getUserSites(), throwsA(isA<AuthException>()));
+      expect(() => ds.getUserSiteProperties(), throwsA(isA<AuthException>()));
       expect(
         () => ds.getQueryStats(websiteId: 1, siteUrl: siteUrl),
         throwsA(isA<AuthException>()),
       );
     });
 
-    test('GetUserSites parses verified site URLs successfully', () async {
+    test('getUserSiteProperties parses rich properties successfully', () async {
       final mockClient = MockClient((request) async {
         expect(request.url.path, '/webmaster/api.svc/json/GetUserSites');
         expect(request.url.queryParameters['apikey'], dummyApiKey);
@@ -134,8 +171,8 @@ void main() {
         return http.Response(
           json.encode({
             'd': [
-              {'Url': 'https://techinfonepal.com/', 'IsVerified': true},
-              {'Url': 'https://rankscope.org/', 'IsVerified': true},
+              {'Url': 'https://example.com/', 'IsVerified': true},
+              {'Url': 'http://unverified.org/', 'IsVerified': false},
             ],
           }),
           200,
@@ -147,17 +184,18 @@ void main() {
         secureStorage: _MockSecureStorage(initialKey: dummyApiKey),
       );
 
-      final sites = await ds.getUserSites();
-      expect(sites, ['https://techinfonepal.com/', 'https://rankscope.org/']);
+      final properties = await ds.getUserSiteProperties();
+      expect(properties.length, 2);
+      expect(properties[0].url, 'https://example.com/');
+      expect(properties[0].isVerified, isTrue);
+      expect(properties[1].url, 'http://unverified.org/');
+      expect(properties[1].isVerified, isFalse);
     });
 
     test('GetQueryStats retrieves search performance data', () async {
       final mockClient = MockClient((request) async {
         expect(request.url.path, '/webmaster/api.svc/json/GetQueryStats');
-        expect(
-          request.url.queryParameters['siteUrl'],
-          'https://techinfonepal.com/',
-        );
+        expect(request.url.queryParameters['siteUrl'], 'https://example.com/');
 
         return http.Response(
           json.encode({
@@ -182,7 +220,7 @@ void main() {
 
       final stats = await ds.getQueryStats(
         websiteId: 1,
-        siteUrl: 'https://techinfonepal.com/',
+        siteUrl: 'https://example.com/',
       );
 
       expect(stats.length, 1);
@@ -249,7 +287,7 @@ void main() {
             return http.Response(
               json.encode({
                 'd': [
-                  {'Url': 'https://techinfonepal.com/', 'IsVerified': true},
+                  {'Url': 'https://example.com/', 'IsVerified': true},
                 ],
               }),
               200,
@@ -257,13 +295,13 @@ void main() {
           } else {
             expect(
               request.url.queryParameters['siteUrl'],
-              'https://techinfonepal.com/',
+              'https://example.com/',
             );
             return http.Response(
               json.encode({
                 'd': [
                   {
-                    'Query': 'tech info',
+                    'Query': 'app seo',
                     'Clicks': 8,
                     'Impressions': 80,
                     'AvgImpressionPosition': 12,
@@ -289,54 +327,26 @@ void main() {
         // Pass domain without protocol or trailing slash
         final count = await repo.syncMetricsFromApi(
           websiteId: 42,
-          siteUrl: 'techinfonepal.com',
+          siteUrl: 'example.com',
         );
 
         expect(count, 1);
         expect(localDs.stored.length, 1);
-        expect(localDs.stored.first.query, 'tech info');
+        expect(localDs.stored.first.query, 'app seo');
         expect(localDs.stored.first.averagePosition, 1.2);
       },
     );
 
-    test('Returns 0 when Bing returns empty stats list', () async {
+    test('Refuses to sync when website is unverified in Bing', () async {
       final mockClient = MockClient((request) async {
-        if (request.url.path.contains('GetUserSites')) {
-          return http.Response(
-            json.encode({
-              'd': [
-                {'Url': 'https://empty-domain.com/', 'IsVerified': true},
-              ],
-            }),
-            200,
-          );
-        }
-        return http.Response(json.encode({'d': []}), 200);
-      });
-
-      final localDs = _FakeLocalBingDatasource();
-      final remoteDs = RemoteBingDatasource(
-        client: mockClient,
-        secureStorage: _MockSecureStorage(initialKey: dummyApiKey),
-      );
-
-      final repo = BingRepositoryImpl(
-        localDatasource: localDs,
-        remoteDatasource: remoteDs,
-      );
-
-      final count = await repo.syncMetricsFromApi(
-        websiteId: 1,
-        siteUrl: 'empty-domain.com',
-      );
-
-      expect(count, 0);
-      expect(localDs.stored, isEmpty);
-    });
-
-    test('Catches AuthException and returns AuthenticationFailure', () async {
-      final mockClient = MockClient((request) async {
-        return http.Response('Unauthorized', 401);
+        return http.Response(
+          json.encode({
+            'd': [
+              {'Url': 'https://unverified.com/', 'IsVerified': false},
+            ],
+          }),
+          200,
+        );
       });
 
       final repo = BingRepositoryImpl(
@@ -348,8 +358,47 @@ void main() {
       );
 
       expect(
-        () => repo.getVerifiedSites(),
-        throwsA(isA<AuthenticationFailure>()),
+        () => repo.syncMetricsFromApi(websiteId: 1, siteUrl: 'unverified.com'),
+        throwsA(
+          isA<ValidationFailure>().having(
+            (e) => e.message,
+            'message',
+            contains('verification is still pending'),
+          ),
+        ),
+      );
+    });
+
+    test('Refuses to sync when website is not found in Bing account', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          json.encode({
+            'd': [
+              {'Url': 'https://other-site.com/', 'IsVerified': true},
+            ],
+          }),
+          200,
+        );
+      });
+
+      final repo = BingRepositoryImpl(
+        localDatasource: _FakeLocalBingDatasource(),
+        remoteDatasource: RemoteBingDatasource(
+          client: mockClient,
+          secureStorage: _MockSecureStorage(initialKey: dummyApiKey),
+        ),
+      );
+
+      expect(
+        () =>
+            repo.syncMetricsFromApi(websiteId: 1, siteUrl: 'missing-site.com'),
+        throwsA(
+          isA<ValidationFailure>().having(
+            (e) => e.message,
+            'message',
+            contains('was not found in your Bing Webmaster account'),
+          ),
+        ),
       );
     });
   });
@@ -358,16 +407,21 @@ void main() {
     final now = DateTime.now();
     final testSite = Website(
       id: 1,
-      domain: 'techinfonepal.com',
-      label: 'Techinfo Nepal',
+      domain: 'example.com',
+      label: 'Example Site',
       createdAt: now,
       updatedAt: now,
     );
 
     Widget buildTestHarness({
       required List<BingMetric> metrics,
-      BingRepository? customRepo,
+      required BingPropertyMatchResult matchResult,
     }) {
+      final mockRepo = _MockBingRepository(
+        matchResult: matchResult,
+        metrics: metrics,
+      );
+
       return ProviderScope(
         overrides: [
           websitesProvider.overrideWith(
@@ -376,33 +430,93 @@ void main() {
           selectedWebsiteIdProvider.overrideWith(
             () => _TestSelectedWebsiteIdNotifier(1),
           ),
+          bingRepositoryProvider.overrideWithValue(mockRepo),
           bingMetricsFutureProvider.overrideWith(
             (ref, websiteId) async => metrics,
           ),
-          if (customRepo != null)
-            bingRepositoryProvider.overrideWithValue(customRepo),
+          bingPropertyStatusProvider.overrideWith(
+            (ref, domain) async => matchResult,
+          ),
         ],
         child: const MaterialApp(home: BingWebmasterView()),
       );
     }
 
-    testWidgets('Renders empty data state with "Sync with Bing" button', (
+    testWidgets('Renders "Verified and Matched" badge for verified domain', (
       tester,
     ) async {
-      await tester.pumpWidget(buildTestHarness(metrics: []));
+      const matchResult = BingPropertyMatchResult(
+        status: BingVerificationStatus.verifiedAndMatched,
+        matchedBingUrl: 'https://example.com/',
+      );
+
+      await tester.pumpWidget(
+        buildTestHarness(metrics: [], matchResult: matchResult),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('Bing Webmaster Tools'), findsOneWidget);
+      expect(find.text('Verified and Matched'), findsOneWidget);
+      expect(
+        find.text('Matched Property: https://example.com/'),
+        findsOneWidget,
+      );
       expect(find.text('No Bing Data Synced Yet'), findsOneWidget);
       expect(find.text('Sync with Bing'), findsOneWidget);
     });
 
+    testWidgets(
+      'Renders "Added Locally, Not Verified in Bing" for unverified site',
+      (tester) async {
+        const matchResult = BingPropertyMatchResult(
+          status: BingVerificationStatus.locallyAddedNotVerified,
+          matchedBingUrl: 'https://example.com/',
+        );
+
+        await tester.pumpWidget(
+          buildTestHarness(metrics: [], matchResult: matchResult),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('Added Locally, Not Verified in Bing'),
+          findsOneWidget,
+        );
+        expect(find.text('Check Verification Status'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Renders "Bing Property Not Found" banner when site is absent',
+      (tester) async {
+        const matchResult = BingPropertyMatchResult(
+          status: BingVerificationStatus.propertyNotFound,
+          availableProperties: [
+            BingSiteProperty(url: 'https://other-site.com/', isVerified: true),
+          ],
+        );
+
+        await tester.pumpWidget(
+          buildTestHarness(metrics: [], matchResult: matchResult),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Bing Property Not Found'), findsOneWidget);
+        expect(find.text('Refresh Bing Sites'), findsOneWidget);
+      },
+    );
+
     testWidgets('Renders populated query metrics list', (tester) async {
+      const matchResult = BingPropertyMatchResult(
+        status: BingVerificationStatus.verifiedAndMatched,
+        matchedBingUrl: 'https://example.com/',
+      );
+
       final sampleMetrics = [
         BingMetric(
           id: 1,
           websiteId: 1,
-          query: 'nepal tech gadgets',
+          query: 'best flutter analytics',
           metricDate: '2026-10-30',
           clicks: 14,
           impressions: 280,
@@ -412,11 +526,13 @@ void main() {
         ),
       ];
 
-      await tester.pumpWidget(buildTestHarness(metrics: sampleMetrics));
+      await tester.pumpWidget(
+        buildTestHarness(metrics: sampleMetrics, matchResult: matchResult),
+      );
       await tester.pumpAndSettle();
 
-      expect(find.text('nepal tech gadgets'), findsOneWidget);
-      expect(find.text('14 clicks • 280 impr.'), findsOneWidget);
+      expect(find.text('best flutter analytics'), findsOneWidget);
+      expect(find.textContaining('14 clicks • 280 impr.'), findsOneWidget);
       expect(find.text('Avg #3.4'), findsOneWidget);
     });
   });

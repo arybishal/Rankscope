@@ -107,12 +107,23 @@ class WebsitesRepositoryImpl implements WebsitesRepository {
   @override
   Future<void> updateWebsite(Website website) async {
     try {
+      final existing = await _localDatasource.getWebsiteByDomain(
+        website.domain,
+        isCompetitor: website.isCompetitor,
+      );
+      if (existing != null && existing.id != website.id) {
+        throw const ValidationFailure(
+          'Another website with this domain is already registered.',
+        );
+      }
       await _localDatasource.updateWebsite(website);
       await AppLogger.instance.info(
         'Websites',
         'website_updated',
         'Updated website #${website.id} (${website.domain})',
       );
+    } on Failure {
+      rethrow;
     } catch (e, st) {
       await AppLogger.instance.error(
         'Websites',

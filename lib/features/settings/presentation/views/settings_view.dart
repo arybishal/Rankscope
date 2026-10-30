@@ -579,6 +579,21 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
           : ListView(
               padding: const EdgeInsets.all(AppSpacing.md),
               children: [
+                // Manage Websites
+                const Text(
+                  'WEBSITES & PROPERTIES',
+                  style: AppTextStyles.labelSmall,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _SettingsNavCard(
+                  icon: Icons.language_outlined,
+                  title: 'Manage Tracked Websites',
+                  description:
+                      'Add new websites, configure competitors, view Bing verification status, and switch active properties.',
+                  onTap: () => context.push('/websites'),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
                 // Air-Gapped Encrypted Backup & Restore
                 const Text(
                   'DATA PERSISTENCE & BACKUP',
@@ -906,6 +921,59 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _SettingsNavCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+
+  const _SettingsNavCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfacePrimary,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              Icon(icon, size: 22, color: AppColors.accent),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTextStyles.labelLarge),
+                    const SizedBox(height: 2),
+                    Text(description, style: AppTextStyles.bodySmall),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: AppColors.textTertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -4,11 +4,12 @@ import '../../../../core/errors/failures.dart';
 import '../../data/datasources/local_bing_datasource.dart';
 import '../../data/datasources/remote_bing_datasource.dart';
 import '../../data/repositories/bing_repository_impl.dart';
-import '../../domain/entities/bing_metric.dart';
 import '../../domain/repositories/bing_repository.dart';
 
 export '../../domain/entities/bing_metric.dart';
+export '../../domain/entities/bing_site_property.dart';
 export '../../domain/repositories/bing_repository.dart';
+export '../../domain/utils/bing_property_matcher.dart';
 
 final remoteBingDatasourceProvider = Provider<RemoteBingDatasource>((ref) {
   return RemoteBingDatasource();
@@ -32,6 +33,12 @@ final bingMetricsFutureProvider = FutureProvider.family<List<BingMetric>, int>((
   final repo = ref.watch(bingRepositoryProvider);
   return await repo.getMetrics(websiteId, limit: 100);
 });
+
+final bingPropertyStatusProvider =
+    FutureProvider.family<BingPropertyMatchResult, String>((ref, domain) async {
+      final repo = ref.watch(bingRepositoryProvider);
+      return await repo.checkPropertyStatus(domain);
+    });
 
 class BingSyncState {
   final bool isSyncing;
@@ -77,8 +84,9 @@ class BingSyncNotifier extends Notifier<BingSyncState> {
         errorMessage: null,
       );
 
-      // Invalidate cached metrics so UI updates immediately
+      // Invalidate cached metrics and status so UI updates immediately
       ref.invalidate(bingMetricsFutureProvider(websiteId));
+      ref.invalidate(bingPropertyStatusProvider(domain));
       return count;
     } on Failure catch (e) {
       state = state.copyWith(isSyncing: false, errorMessage: e.message);
@@ -92,14 +100,18 @@ class BingSyncNotifier extends Notifier<BingSyncState> {
     }
   }
 
-  Future<List<String>?> testConnection() async {
+  void refreshStatus(String domain) {
+    ref.invalidate(bingPropertyStatusProvider(domain));
+  }
+
+  Future<List<BingSiteProperty>?> testConnection() async {
     state = state.copyWith(isSyncing: true, errorMessage: null);
 
     try {
       final repo = ref.read(bingRepositoryProvider);
-      final sites = await repo.getVerifiedSites();
+      final properties = await repo.getSiteProperties();
       state = state.copyWith(isSyncing: false, errorMessage: null);
-      return sites;
+      return properties;
     } on Failure catch (e) {
       state = state.copyWith(isSyncing: false, errorMessage: e.message);
       return null;

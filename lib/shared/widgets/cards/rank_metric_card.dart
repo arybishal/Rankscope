@@ -40,14 +40,17 @@ class RankMetricCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title.toUpperCase(),
-                style: AppTextStyles.labelSmall.copyWith(
-                  letterSpacing: 0.8,
-                  color: AppColors.textTertiary,
+              Expanded(
+                child: Text(
+                  title.toUpperCase(),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    letterSpacing: 0.8,
+                    color: AppColors.textTertiary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              ?trailing,
+              if (trailing != null) ...[const SizedBox(width: 4), trailing!],
             ],
           ),
           const SizedBox(height: AppSpacing.sm),

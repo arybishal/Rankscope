@@ -206,10 +206,14 @@ class BingWebmasterView extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Bing Search Query Insights',
-                      style: AppTextStyles.titleMedium,
+                    const Expanded(
+                      child: Text(
+                        'Bing Search Query Insights',
+                        style: AppTextStyles.titleMedium,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     statusAsync.maybeWhen(
                       data: (res) => res.isSyncAllowed
                           ? TextButton.icon(
@@ -490,15 +494,18 @@ class _BingStatusBanner extends StatelessWidget {
                     color: AppColors.rankGain,
                   ),
                   const SizedBox(width: AppSpacing.xs),
-                  const Text(
-                    'Verified and Matched',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF166534),
+                  const Expanded(
+                    child: Text(
+                      'Verified and Matched',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF166534),
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.refresh, size: 16),
                     tooltip: 'Refresh Status',

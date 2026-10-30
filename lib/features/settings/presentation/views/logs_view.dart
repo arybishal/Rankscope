@@ -623,11 +623,14 @@ class _LogsViewState extends State<LogsView> {
                                   children: [
                                     Row(
                                       children: [
-                                        Text(
-                                          '[${log.module}] ${log.eventName}',
-                                          style: AppTextStyles.labelMedium,
+                                        Expanded(
+                                          child: Text(
+                                            '[${log.module}] ${log.eventName}',
+                                            style: AppTextStyles.labelMedium,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                        const Spacer(),
+                                        const SizedBox(width: 8),
                                         Text(
                                           dateFormat.format(log.timestamp),
                                           style: const TextStyle(

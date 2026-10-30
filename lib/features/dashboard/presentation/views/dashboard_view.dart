@@ -229,7 +229,8 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
                               : AppColors.rankGain,
                         ),
                         const SizedBox(width: 8),
-                        Flexible(
+                        Expanded(
+                          flex: 3,
                           child: Text(
                             w.label,
                             style: AppTextStyles.labelLarge,
@@ -238,6 +239,7 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
                         ),
                         const SizedBox(width: 6),
                         Flexible(
+                          flex: 2,
                           child: Text(
                             '(${w.domain})',
                             style: AppTextStyles.bodySmall,
@@ -296,29 +298,10 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.hub_outlined, size: 20, color: AppColors.accent),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Search Performance Sync',
-                      style: AppTextStyles.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Correlate saved keywords with live search query data',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 360;
+              final syncButton = ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
@@ -368,8 +351,73 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
                           );
                         }
                       },
-              ),
-            ],
+              );
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(
+                          Icons.hub_outlined,
+                          size: 20,
+                          color: AppColors.accent,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Search Performance Sync',
+                            style: AppTextStyles.titleMedium,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Correlate saved keywords with live search query data',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(width: double.infinity, child: syncButton),
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  const Icon(
+                    Icons.hub_outlined,
+                    size: 20,
+                    color: AppColors.accent,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Search Performance Sync',
+                          style: AppTextStyles.titleMedium,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Correlate saved keywords with live search query data',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  syncButton,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 8),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
@@ -484,12 +532,17 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
                 color: isSelected ? AppColors.accent : AppColors.textSecondary,
               ),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                  color: isSelected ? AppColors.accent : AppColors.textPrimary,
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    color: isSelected
+                        ? AppColors.accent
+                        : AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -600,24 +653,32 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
         const SizedBox(height: AppSpacing.md),
 
         // Actions Bar (PDF, CSV Export & Add Keyword)
-        Row(
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            OutlinedButton.icon(
-              icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
-              label: const Text('Export PDF'),
-              onPressed: allKeywords.isEmpty
-                  ? null
-                  : () => _exportPdf(context, widget.website, allKeywords),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+                  label: const Text('Export PDF'),
+                  onPressed: allKeywords.isEmpty
+                      ? null
+                      : () => _exportPdf(context, widget.website, allKeywords),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.table_chart_outlined, size: 16),
+                  label: const Text('Export CSV'),
+                  onPressed: allKeywords.isEmpty
+                      ? null
+                      : () => _exportCsv(context, widget.website, allKeywords),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.sm),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.table_chart_outlined, size: 16),
-              label: const Text('Export CSV'),
-              onPressed: allKeywords.isEmpty
-                  ? null
-                  : () => _exportCsv(context, widget.website, allKeywords),
-            ),
-            const Spacer(),
             Tooltip(
               message: 'Add Keyword',
               child: ElevatedButton.icon(
@@ -709,7 +770,14 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Keyword Rankings', style: AppTextStyles.titleMedium),
+            const Expanded(
+              child: Text(
+                'Keyword Rankings',
+                style: AppTextStyles.titleMedium,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
             DropdownButtonHideUnderline(
               child: DropdownButton<_SortOption>(
                 value: _sort,
@@ -1358,15 +1426,18 @@ class _KeywordRankingCard extends ConsumerWidget {
             children: [
               Icon(icon, size: 14, color: brandColor),
               const SizedBox(width: 6),
-              Text(
-                dataLabel,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: brandColor,
+              Expanded(
+                child: Text(
+                  dataLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: brandColor,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               if (hasData)
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -1432,18 +1503,18 @@ class _KeywordRankingCard extends ConsumerWidget {
 
           if (hasData) ...[
             const SizedBox(height: 6),
-            // Row 2: Metrics (Clicks, Impressions, CTR)
-            Row(
+            // Row 2: Metrics (Clicks, Impressions, CTR, Synced)
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 _buildMetricSnippet('Clicks', clicks.toString()),
-                const SizedBox(width: 12),
                 _buildMetricSnippet('Impressions', _formatNumber(impressions)),
-                const SizedBox(width: 12),
                 _buildMetricSnippet(
                   'CTR',
                   '${(ctr * 100).toStringAsFixed(1)}%',
                 ),
-                const Spacer(),
                 if (syncedAt != null)
                   Text(
                     'Synced ${DateFormatter.relativeTime(syncedAt)}',
@@ -1566,12 +1637,15 @@ class _KeywordRankingCard extends ConsumerWidget {
           children: [
             Icon(Icons.check_circle, size: 10, color: Color(0xFF16A34A)),
             SizedBox(width: 3),
-            Text(
-              'Matches Target Landing Page',
-              style: TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF16A34A),
+            Flexible(
+              child: Text(
+                'Matches Target Landing Page',
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF16A34A),
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -1594,12 +1668,15 @@ class _KeywordRankingCard extends ConsumerWidget {
               color: Color(0xFFB45309),
             ),
             SizedBox(width: 3),
-            Text(
-              'Different Page Ranking (Expected Target Not Ranking)',
-              style: TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFB45309),
+            Flexible(
+              child: Text(
+                'Different Page Ranking (Expected Target Not Ranking)',
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFB45309),
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

@@ -175,7 +175,10 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
           // Keyword Metadata & Status Row
-          Row(
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               _StatusPill(
                 label: keyword.isActive ? 'Active' : 'Paused',
@@ -183,22 +186,14 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                     ? AppColors.rankGain
                     : AppColors.textTertiary,
               ),
-              const SizedBox(width: 6),
-              if (keyword.isNew) ...[
+              if (keyword.isNew)
                 const _StatusPill(label: 'NEW', color: AppColors.accent),
-                const SizedBox(width: 6),
-              ],
-              if (keyword.isLost) ...[
+              if (keyword.isLost)
                 const _StatusPill(label: 'LOST', color: AppColors.rankDrop),
-                const SizedBox(width: 6),
-              ],
-              if (keyword.isRecovered) ...[
+              if (keyword.isRecovered)
                 const _StatusPill(label: 'RECOVERED', color: Color(0xFF16A34A)),
-                const SizedBox(width: 6),
-              ],
-              const Spacer(),
               Text(
-                '${keyword.targetCountry} • ${keyword.device}',
+                '• ${keyword.targetCountry} • ${keyword.device}',
                 style: AppTextStyles.bodySmall,
               ),
             ],
@@ -671,11 +666,14 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
             children: [
               const Icon(Icons.link, size: 18, color: AppColors.accent),
               const SizedBox(width: 6),
-              const Text(
-                'Landing Pages & Target Matching',
-                style: AppTextStyles.labelLarge,
+              const Expanded(
+                child: Text(
+                  'Landing Pages & Target Matching',
+                  style: AppTextStyles.labelLarge,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               if (bestUrl != null)
                 IconButton(
                   icon: const Icon(Icons.copy, size: 16),

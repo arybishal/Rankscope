@@ -96,44 +96,61 @@ class _DashboardContent extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
-          // Website Selector Dropdown
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceSecondary,
-              borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-              border: Border.all(color: AppColors.borderSubtle),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int>(
-                value: website.id,
-                isExpanded: true,
-                dropdownColor: AppColors.surfacePrimary,
-                items: allWebsites.map((w) {
-                  return DropdownMenuItem<int>(
-                    value: w.id,
-                    child: Row(
-                      children: [
-                        Icon(
-                          w.isCompetitor ? Icons.shield_outlined : Icons.check_circle_outline,
-                          size: 16,
-                          color: w.isCompetitor ? AppColors.rankDrop : AppColors.rankGain,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(w.label, style: AppTextStyles.labelLarge),
-                        const SizedBox(width: 6),
-                        Text('(${w.domain})', style: AppTextStyles.bodySmall),
-                      ],
+          // Website Selector & Actions Row
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceSecondary,
+                    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                    border: Border.all(color: AppColors.borderSubtle),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: website.id,
+                      isExpanded: true,
+                      dropdownColor: AppColors.surfacePrimary,
+                      items: allWebsites.map((w) {
+                        return DropdownMenuItem<int>(
+                          value: w.id,
+                          child: Row(
+                            children: [
+                              Icon(
+                                w.isCompetitor ? Icons.shield_outlined : Icons.check_circle_outline,
+                                size: 16,
+                                color: w.isCompetitor ? AppColors.rankDrop : AppColors.rankGain,
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(child: Text(w.label, style: AppTextStyles.labelLarge, overflow: TextOverflow.ellipsis)),
+                              const SizedBox(width: 6),
+                              Flexible(child: Text('(${w.domain})', style: AppTextStyles.bodySmall, overflow: TextOverflow.ellipsis)),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (id) {
+                        if (id != null) {
+                          ref.read(selectedWebsiteIdProvider.notifier).select(id);
+                        }
+                      },
                     ),
-                  );
-                }).toList(),
-                onChanged: (id) {
-                  if (id != null) {
-                    ref.read(selectedWebsiteIdProvider.notifier).select(id);
-                  }
-                },
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: AppSpacing.xs),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.textSecondary),
+                tooltip: 'Edit Website',
+                onPressed: () => _openEditWebsiteDialog(context, website),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.rankDrop),
+                tooltip: 'Delete Website',
+                onPressed: () => _confirmDeleteWebsite(context, ref, website),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
 
@@ -328,6 +345,59 @@ class _DashboardContent extends ConsumerWidget {
               }
             },
             child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openEditWebsiteDialog(BuildContext context, Website website) {
+    showDialog(
+      context: context,
+      builder: (_) => AddWebsiteDialog(initialWebsite: website),
+    );
+  }
+
+  void _confirmDeleteWebsite(BuildContext context, WidgetRef ref, Website website) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfacePrimary,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+          side: const BorderSide(color: AppColors.borderSubtle),
+        ),
+        title: const Text('Delete Website', style: AppTextStyles.titleLarge),
+        content: Text(
+          'Are you sure you want to delete "${website.label}" (${website.domain})?\n\n'
+          'This will permanently delete this website, all tracked keywords, manual ranking records, and analytics. This action cannot be undone.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.rankDrop),
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              try {
+                await ref.read(websitesProvider.notifier).deleteWebsite(website.id!);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Website "${website.label}" deleted.')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete website: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

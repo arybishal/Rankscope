@@ -43,14 +43,27 @@ class LocalWebsitesDatasource {
     return WebsiteModel.fromMap(results.first);
   }
 
+  Future<WebsiteModel?> getWebsiteByDomain(String domain, {required bool isCompetitor}) async {
+    final db = await _dbManager.database;
+    final List<Map<String, dynamic>> results = await db.query(
+      DatabaseConstants.tableWebsites,
+      where: 'domain = ? AND is_competitor = ?',
+      whereArgs: [domain, isCompetitor ? 1 : 0],
+      limit: 1,
+    );
+
+    if (results.isEmpty) return null;
+    return WebsiteModel.fromMap(results.first);
+  }
+
   Future<WebsiteModel> insertWebsite(WebsiteModel model) async {
     final db = await _dbManager.database;
     final id = await db.insert(
       DatabaseConstants.tableWebsites,
       model.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      conflictAlgorithm: ConflictAlgorithm.abort,
     );
-    return model.copyWith(id: id) as WebsiteModel;
+    return model.copyWith(id: id);
   }
 
   Future<int> updateWebsite(WebsiteModel model) async {

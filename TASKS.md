@@ -4,6 +4,31 @@ This document outlines the engineering breakdown for building **RankScope** from
 
 ---
 
+## 🚀 Task 001: Data Persistence, Authenticated Encrypted Backups & Log Management (COMPLETED)
+
+- **Status**: ✅ COMPLETED (Release v1.0.1)
+- **Primary Objectives**:
+  1. Fix website persistence and cascade deletion bugs.
+  2. Implement complete AES-256-GCM encrypted backup & dual-mode restore system.
+  3. Implement centralized diagnostic logging service with automated credential sanitization and developer dashboard.
+- **Key Deliverables**:
+  - `lib/features/websites/data/models/website_model.dart`: Overrode `copyWith` returning concrete `WebsiteModel`.
+  - `lib/features/keywords/data/models/keyword_model.dart`: Overrode `copyWith` returning concrete `KeywordModel`.
+  - `lib/features/websites/data/datasources/local_websites_datasource.dart`: Added `getWebsiteByDomain`, swapped `ConflictAlgorithm.replace` for `ConflictAlgorithm.abort`.
+  - `lib/features/websites/data/repositories/websites_repository_impl.dart`: Added domain uniqueness validation preventing accidental cascade deletions.
+  - `lib/features/websites/presentation/controllers/websites_controller.dart`: Auto-selection of newly created websites in `selectedWebsiteIdProvider`.
+  - `lib/features/dashboard/presentation/views/dashboard_view.dart`: Added Edit Website dialog and cascading Delete Website dialog with confirmation.
+  - `lib/shared/widgets/dialogs/add_website_dialog.dart`: Support for both create and edit modes with form validation.
+  - `lib/features/backup_restore/data/services/backup_restore_service.dart`: AES-256-GCM + PBKDF2 authenticated backup export/import (`.rankscope`), full restore with automatic recovery snapshot rollback, and non-destructive merge import.
+  - `lib/core/logging/log_level.dart`, `log_entry.dart`, `log_sanitizer.dart`, `app_logger.dart`: Structured logging with 2,000-entry retention cap and regex credential scrubbing.
+  - `lib/features/settings/presentation/views/logs_view.dart`: Complete diagnostics dashboard with search, level/module filtering, export to `.txt`/`.json`, and clipboard copying.
+  - `lib/core/database/migrations/m002_add_logs_table.dart`: Database schema migration v2 adding `app_logs` table with performance indexes.
+  - `test/features/websites/website_persistence_test.dart`: 5 persistence integration tests.
+  - `test/features/backup_restore/backup_restore_test.dart`: Comprehensive encryption, preview, full restore, and merge import tests.
+  - `test/core/logging/app_logger_test.dart`: Diagnostic logging, filtering, stats, and credential sanitization tests.
+
+---
+
 ## Phase 0: Environment & Tooling Setup
 
 ### TASK-001: Flutter SDK Installation & Environment Validation

@@ -45,6 +45,33 @@ class WebsiteModel extends Website {
     );
   }
 
+  @override
+  WebsiteModel copyWith({
+    int? id,
+    String? domain,
+    String? label,
+    bool? isCompetitor,
+    String? gscPropertyId,
+    String? bingSiteUrl,
+    String? faviconUrl,
+    String? notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return WebsiteModel(
+      id: id ?? this.id,
+      domain: domain ?? this.domain,
+      label: label ?? this.label,
+      isCompetitor: isCompetitor ?? this.isCompetitor,
+      gscPropertyId: gscPropertyId ?? this.gscPropertyId,
+      bingSiteUrl: bingSiteUrl ?? this.bingSiteUrl,
+      faviconUrl: faviconUrl ?? this.faviconUrl,
+      notes: notes ?? this.notes,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,

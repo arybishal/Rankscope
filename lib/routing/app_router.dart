@@ -4,6 +4,7 @@ import '../features/bing_webmaster/presentation/views/bing_webmaster_view.dart';
 import '../features/dashboard/presentation/views/dashboard_view.dart';
 import '../features/manual_tracking/presentation/views/manual_tracking_view.dart';
 import '../features/search_console/presentation/views/search_console_view.dart';
+import '../features/settings/presentation/views/logs_view.dart';
 import '../features/settings/presentation/views/settings_view.dart';
 import 'navigation_shell.dart';
 
@@ -14,6 +15,11 @@ final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/dashboard',
   routes: [
+    GoRoute(
+      path: '/logs',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const LogsView(),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
         return NavigationShell(navigationShell: navigationShell);

@@ -59,7 +59,7 @@ class LocalKeywordsDatasource {
       model.toMap(),
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
-    return model.copyWith(id: id) as KeywordModel;
+    return model.copyWith(id: id);
   }
 
   Future<List<KeywordModel>> insertKeywordsBatch(List<KeywordModel> models) async {
@@ -74,7 +74,7 @@ class LocalKeywordsDatasource {
           conflictAlgorithm: ConflictAlgorithm.ignore,
         );
         if (id > 0) {
-          inserted.add(model.copyWith(id: id) as KeywordModel);
+          inserted.add(model.copyWith(id: id));
         }
       }
     });

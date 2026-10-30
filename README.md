@@ -2,14 +2,14 @@
 
 > **Zero-Cost, Privacy-First SEO Rank & Search Performance Tracker for Android**
 
-[![Release](https://img.shields.io/github/v/release/arybishal/Rankscope?style=flat-square&color=0F172A)](https://github.com/arybishal/Rankscope/releases/tag/v1.0.0)
+[![Release](https://img.shields.io/github/v/release/arybishal/Rankscope?style=flat-square&color=0F172A)](https://github.com/arybishal/Rankscope/releases/tag/v1.0.1)
 [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-blue?style=flat-square)](https://github.com/arybishal/Rankscope)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](https://github.com/arybishal/Rankscope)
 [![Budget](https://img.shields.io/badge/Budget-%240%20Zero--Cost-brightgreen?style=flat-square)](https://github.com/arybishal/Rankscope)
 
 RankScope is an open-source, offline-first Android application built with Flutter that empowers website owners, digital marketers, and SEO professionals to track search keyword positions, monitor competitor performance, and analyze organic visibility across Google and Bing—with **strictly $0 spend**, **zero backend infrastructure**, and **100% on-device data sovereignty**.
 
-📥 **[Download Latest APK (v1.0.0)](https://github.com/arybishal/Rankscope/releases/download/v1.0.0/RankScope-v1.0.0.apk)** • [GitHub Release Notes](https://github.com/arybishal/Rankscope/releases/tag/v1.0.0)
+📥 **[Download Latest APK (v1.0.1)](https://github.com/arybishal/Rankscope/releases/download/v1.0.1/RankScope-v1.0.1.apk)** • [GitHub Release Notes](https://github.com/arybishal/Rankscope/releases/tag/v1.0.1)
 
 ---
 
@@ -28,7 +28,7 @@ RankScope is an open-source, offline-first Android application built with Flutte
 
 - **Multi-Property Management**:
   - Track your own websites alongside direct competitor domains.
-  - Group and categorize keywords with custom tags.
+  - Full CRUD lifecycle: permanent SQLite storage, duplicate domain prevention, inline editing, and cascade deletion with confirmation.
 - **Google Search Console Integration (Free)**:
   - Connect verified Google Search Console properties using secure Google OAuth 2.0 PKCE.
   - Pull query-level performance metrics: Clicks, Impressions, CTR, and Average Position across countries and devices.
@@ -38,15 +38,21 @@ RankScope is an open-source, offline-first Android application built with Flutte
 - **Manual Rank Tracking Engine**:
   - Record exact ranking positions, ranking URLs, SERP features (Featured Snippets, Local Pack, People Also Ask, Video Carousel), country codes, and city names.
   - Track ranking deltas (gain/drop) over time against competitor URLs.
+- **Authenticated Encrypted Backups (`.rankscope`)**:
+  - Full backup encryption utilizing **AES-256-GCM** with **PBKDF2** (HMAC-SHA256, 100,000 iterations) master password derivation.
+  - Unique 16-byte cryptographic salt and 12-byte nonce per backup.
+  - Secure inclusion of API keys and credentials without cleartext exposure.
+  - Dual-mode restoration: **Full Restore** (transactional with automatic recovery snapshot) and **Merge Import** (conflict-free upsert).
+- **Log Management Center (`AppLogger`)**:
+  - Centralized on-device diagnostic logging (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`).
+  - Automated regex credential scrubbing (`LogSanitizer`) masking Google OAuth tokens, Bing keys, and passwords.
+  - Developer dashboard in Settings with severity/module filtering, live search, `.txt`/`.json` export, and clipboard copying.
 - **Premium Minimalist Light-Mode UI**:
   - Polished, distraction-free aesthetic crafted exclusively for high legibility in light environments.
   - Monochromatic contrast, subtle neutral dividers, crisp cards, and zero heavy drop-shadows.
 - **Local PDF & CSV Reporting**:
   - Generate comprehensive executive reports directly on your phone with zero third-party cloud APIs.
   - Export ranking distributions, top gainers, top losers, and competitor parity matrices.
-- **Air-Gapped Backup & Restore**:
-  - Export and restore encrypted or raw database archives to device storage or local backups.
-  - SHA-256 integrity checks ensure bulletproof recovery.
 
 ---
 

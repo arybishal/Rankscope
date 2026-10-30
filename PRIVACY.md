@@ -69,3 +69,23 @@ RankScope strictly honors search engine Terms of Service:
 
 - **Export Anytime**: You can export your full database snapshot or generate standard CSV and PDF reports at any time.
 - **Immediate Data Destruction**: Clearing the application data in Android Settings or uninstalling RankScope permanently purges all local SQLite records, secure tokens, and cached reports from your device.
+
+---
+
+## 7. Authenticated Encrypted Backups (`.rankscope`)
+
+When you create a complete backup in RankScope:
+- The entire backup payload (including websites, keywords, target URLs, rankings, and stored API credentials) is encrypted with **AES-256-GCM authenticated encryption**.
+- The encryption key is derived dynamically from your user-provided master password using **PBKDF2 with HMAC-SHA256 (100,000 iterations)**.
+- Every exported backup uses a **cryptographically unique 16-byte random salt and 12-byte nonce**.
+- **Zero Plaintext Credentials:** API keys and OAuth tokens are never exported in cleartext.
+- **No Password Escrow:** RankScope never stores, caches, or transmits your backup password. If you lose your password, the backup archive cannot be decrypted.
+
+---
+
+## 8. Local-Only Diagnostic Logging with Credential Redaction
+
+RankScope includes an embedded diagnostic logging center designed for troubleshooting and debugging:
+- **100% Air-Gapped:** Logs are written exclusively to the local SQLite database on your device and are never automatically transmitted over the network.
+- **Automatic Credential Redaction (`LogSanitizer`):** All log messages and stack traces pass through an automated redaction engine that regex-scrubs Google OAuth tokens, Bing API keys, passwords, and authorization headers before disk persistence.
+- **Strict Storage Bounding:** Diagnostic logs are capped at a maximum of 2,000 entries, automatically pruning the oldest entries to prevent unlimited disk consumption.

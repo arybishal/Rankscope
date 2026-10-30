@@ -73,6 +73,31 @@ class SecureStorageService {
     await _storage.delete(key: _keyBingApiKey);
   }
 
+  // --- Backup & Restore of Stored Credentials ---
+
+  Future<Map<String, String>> getAllCredentials() async {
+    final Map<String, String> creds = {};
+    final gscRefresh = await getGscRefreshToken();
+    if (gscRefresh != null) creds[_keyGscRefreshToken] = gscRefresh;
+    final gscAccess = await getGscAccessToken();
+    if (gscAccess != null) creds[_keyGscAccessToken] = gscAccess;
+    final gscExpiry = await _storage.read(key: _keyGscTokenExpiry);
+    if (gscExpiry != null) creds[_keyGscTokenExpiry] = gscExpiry;
+    final gscClient = await getGscClientId();
+    if (gscClient != null) creds[_keyGscClientId] = gscClient;
+    final bingKey = await getBingApiKey();
+    if (bingKey != null) creds[_keyBingApiKey] = bingKey;
+    return creds;
+  }
+
+  Future<void> restoreCredentials(Map<String, dynamic> creds) async {
+    for (final entry in creds.entries) {
+      if (entry.value != null) {
+        await _storage.write(key: entry.key, value: entry.value.toString());
+      }
+    }
+  }
+
   // --- Purge All Sensitive State ---
 
   Future<void> clearAllCredentials() async {

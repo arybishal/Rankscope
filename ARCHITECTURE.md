@@ -387,28 +387,63 @@ graph TD
 
 ---
 
-## 10. Backup and Restore Design
+## 10. Authenticated Encrypted Backup & Restore Architecture
+
+RankScope features an encrypted backup and dual-mode restore system ensuring zero plaintext credential leaks and non-destructive data recovery.
 
 ```mermaid
 flowchart TD
-    subgraph BackupPipeline ["Backup Flow"]
-        B1["User triggers Create Backup"] --> B2["Flush SQLite WAL checkpoint (PRAGMA wal_checkpoint(FULL))"]
-        B2 --> B3["Package Database File + Metadata JSON into Encrypted/Raw Archive"]
-        B3 --> B4["Calculate SHA-256 Checksum"]
-        B4 --> B5["Write file to user-selected destination via Storage Access Framework"]
+    subgraph BackupPipeline ["Encrypted Export Flow"]
+        B1["User triggers Export Complete Backup"] --> B2["User Enters Master Password"]
+        B2 --> B3["Consolidate WAL checkpoint & Query all 7 domain tables"]
+        B3 --> B4["Read Encrypted Hardware Credentials (GSC & Bing)"]
+        B4 --> B5["Compile Complete JSON Payload"]
+        B5 --> B6["Generate 16-byte Salt & 12-byte Nonce"]
+        B6 --> B7["Derive Key via PBKDF2 (HMAC-SHA256, 100k Iterations)"]
+        B7 --> B8["Encrypt Payload via AES-256-GCM with Authentication Tag"]
+        B8 --> B9["Write .rankscope Archive & Share via Android Intent"]
     end
 
-    subgraph RestorePipeline ["Restore Flow"]
-        R1["User selects .rankscope backup file"] --> R2["Verify SHA-256 Checksum and Signature"]
-        R2 --> R3["Inspect Schema Version Header in Metadata"]
-        R3 --> R4{"Is schema version compatible?"}
-        R4 -->|No| R5["Reject restore with detailed error"]
-        R4 -->|Yes| R6["Close active DB connections & create temporary rollback copy"]
-        R6 --> R7["Replace local SQLite file & run pending migrations"]
-        R7 --> R8["Reload Riverpod providers & refresh UI"]
+    subgraph RestorePipeline ["Decryption & Dual-Mode Restore Flow"]
+        R1["User selects .rankscope backup file"] --> R2["Prompt for Backup Password"]
+        R2 --> R3["Derive PBKDF2 Key & Decrypt AES-256-GCM SecretBox"]
+        R3 --> R4{"Authentication Tag Valid?"}
+        R4 -->|No| R5["Reject with Authentication Error (Tampered or Wrong Password)"]
+        R4 -->|Yes| R6["Parse Payload & Display Preview Dialog"]
+        R6 --> R7{"User Selects Restore Mode"}
+        R7 -->|Full Restore| R8["Create Auto-Recovery Snapshot -> Transactional Table Wipe & Repopulation -> Restore KeyStore"]
+        R7 -->|Merge Import| R9["Domain/Keyword Conflict Matcher -> Non-Destructive Upsert -> Merge Missing Records"]
+        R8 --> R10["Reload Providers & Refresh UI"]
+        R9 --> R10
     end
 ```
 
-### Security & Safety Rules
-- Restores are wrapped in an atomic rollback guard: if the imported database fails integrity check `PRAGMA integrity_check`, the original database is automatically restored.
-- Secrets (OAuth refresh tokens) are optionally excluded or encrypted using a user-specified passphrase to prevent unauthorized token extraction during device migrations.
+### Security & Safety Guarantees
+- **No Plaintext Credentials**: All credentials stored in Android KeyStore are safely serialized inside the authenticated AES-256-GCM envelope.
+- **Zero Hardcoded Keys**: Cryptographic keys are never hardcoded or retained in application memory. The master password is provided by the user at export and import time.
+- **Rollback Safety**: Full restore automatically writes `rankscope.db.recovery_snapshot`. If an unhandled exception or transaction abort occurs during restoration, the system automatically rolls back to the previous snapshot.
+- **Non-Destructive Merge**: Merge import dynamically maps foreign keys, avoiding duplicate domain registrations and cascade deletion hazards.
+
+---
+
+## 11. Centralized Diagnostic Logging Architecture
+
+RankScope implements an embedded diagnostic logging center (`lib/core/logging/`) for troubleshooting and auditing without cloud telemetry.
+
+```mermaid
+flowchart LR
+    Event["App Lifecycle / Error / DB Operation"] --> Logger["AppLogger Singleton"]
+    Logger --> Sanitizer["LogSanitizer (Regex Credential Redaction)"]
+    Sanitizer --> SQLiteLogs[("app_logs Table (SQLite)")]
+    SQLiteLogs --> Pruner{"Total Rows > 2,000?"}
+    Pruner -->|Yes| Prune["Purge Oldest Records"]
+    Pruner -->|No| Store["Retain Record"]
+    SQLiteLogs --> UI["Logs & Diagnostics Dashboard (LogsView)"]
+    UI --> Export["Export (.txt / .json) via Native Share"]
+```
+
+### Core Logging Specifications
+- **Severity Levels**: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.
+- **Automatic Scrubbing (`LogSanitizer`)**: Regex filters automatically replace Bearer tokens, Google OAuth access/refresh tokens, Bing 32-char hex API keys, passwords, and client secrets with `[REDACTED]`.
+- **Bounded Retention Policy**: Capped strictly at a maximum of 2,000 entries with periodic pruning every 50 writes to maintain a bounded footprint.
+- **Air-Gapped Sovereign Design**: Logs are never uploaded to remote servers or third-party telemetry services. Users can view, search, filter by severity/module, copy individual entries, or export reports on demand.

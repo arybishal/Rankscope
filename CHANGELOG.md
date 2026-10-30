@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2026-10-30
+
+### Task 001: Data Persistence, Authenticated Encrypted Backups & Log Management Center
+- **Release APK**: [RankScope-v1.0.1.apk](https://github.com/arybishal/Rankscope/releases/download/v1.0.1/RankScope-v1.0.1.apk)
+- **SHA-256 Checksum**: `3146FC774C4FA5E48AC9C19D91B4B5EE59E709A041F60532FFD7D1BF66502692`
+
+### Fixed
+- **Website Persistence Root Cause Resolved**: Fixed `_TypeError` cast exception where `Website.copyWith` downcast to `WebsiteModel` failed in data source layer. Added explicit `copyWith` type overrides in both `WebsiteModel` and `KeywordModel`.
+- **SQLite Conflict Strategy Restructured**: Replaced destructive `ConflictAlgorithm.replace` on websites table with pre-check uniqueness validation (`getWebsiteByDomain`) and `ConflictAlgorithm.abort`, preventing unintended cascade deletions of child keywords and historical rank records.
+- **State Selection Sync**: Automatically select newly created website in `SelectedWebsiteIdNotifier` upon insertion, immediately updating dashboard context.
+- **Website Management UX**: Added dedicated inline Edit Website dialog (with label/notes editing) and Delete Website dialog with explicit cascading confirmation.
+
+### Added
+- **Authenticated AES-256-GCM Encrypted Backups (`.rankscope`)**: Complete backup and restore system utilizing PBKDF2 (HMAC-SHA256, 100,000 iterations) with unique 16-byte cryptographic salt and 12-byte nonce per archive.
+- **Preview & Dual-Mode Restore**: Decryption verification, preview inspection dialog (websites, keywords, ranking records, integrations count), and user choice between **Full Restore** (transactional with automatic recovery snapshot) and **Merge Import** (conflict-free upsert).
+- **Log Management Center (`AppLogger`)**: Centralized local diagnostic logging service with severity levels (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`), structured metadata, and bounded retention (max 2,000 entries).
+- **Automated Credential Redaction (`LogSanitizer`)**: Automated regex scrubbing of Google OAuth tokens, Bing API keys, passwords, client secrets, and authorization headers before disk persistence.
+- **Diagnostic Dashboard (`LogsView`)**: Developer-friendly UI in Settings featuring metrics cards, real-time search, severity/module filters, full details bottom sheet, clipboard copy, and `.txt` / `.json` export via native share sheet.
+- **Database Schema Migration 002**: Added `app_logs` table with performance indexes on `timestamp DESC`, `level`, and `module`.
+- **Comprehensive Automated Tests**: Added test suites for website persistence, PBKDF2 + AES-GCM cryptography, encrypted backup/restore (full + merge), and diagnostic logging with redaction.
+
+---
+
 ## [1.0.0] - 2026-10-30
 
 ### Initial Production Release

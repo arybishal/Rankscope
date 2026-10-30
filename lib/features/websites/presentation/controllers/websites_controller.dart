@@ -31,7 +31,7 @@ class WebsitesNotifier extends AsyncNotifier<List<Website>> {
     });
   }
 
-  Future<Website?> addWebsite({
+  Future<Website> addWebsite({
     required String domain,
     required String label,
     bool isCompetitor = false,
@@ -54,12 +54,26 @@ class WebsitesNotifier extends AsyncNotifier<List<Website>> {
 
     final created = await repo.addWebsite(newSite);
     await loadWebsites();
+    if (created.id != null) {
+      ref.read(selectedWebsiteIdProvider.notifier).select(created.id);
+    }
     return created;
+  }
+
+  Future<void> updateWebsite(Website website) async {
+    final repo = ref.read(websitesRepositoryProvider);
+    final updated = website.copyWith(updatedAt: DateTime.now());
+    await repo.updateWebsite(updated);
+    await loadWebsites();
   }
 
   Future<void> deleteWebsite(int id) async {
     final repo = ref.read(websitesRepositoryProvider);
     await repo.deleteWebsite(id);
+    final currentSelectedId = ref.read(selectedWebsiteIdProvider);
+    if (currentSelectedId == id) {
+      ref.read(selectedWebsiteIdProvider.notifier).select(null);
+    }
     await loadWebsites();
   }
 }

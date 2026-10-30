@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'migrations/migration.dart';
 import 'migrations/m001_initial_schema.dart';
+import 'migrations/m002_add_logs_table.dart';
 
 /// Registry and orchestrator for database migrations.
 class DatabaseMigrations {
@@ -8,6 +9,7 @@ class DatabaseMigrations {
 
   static final Map<int, Migration> migrations = {
     1: M001InitialSchema(),
+    2: M002AddLogsTable(),
   };
 
   /// Executes all migrations needed to bring the database to target version.

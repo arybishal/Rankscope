@@ -126,6 +126,16 @@ erDiagram
         INTEGER generated_at
     }
 
+    APP_LOGS {
+        INTEGER id PK
+        INTEGER timestamp
+        TEXT level
+        TEXT module
+        TEXT event_name
+        TEXT message
+        TEXT details
+    }
+
     SCHEMA_MIGRATIONS {
         INTEGER version PK
         TEXT migration_name
@@ -327,6 +337,34 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     applied_at INTEGER NOT NULL
 );
 ```
+
+### 3.9. `app_logs` (Schema v2)
+Central diagnostic logging store capturing structured application lifecycle, database failures, backup/restore audits, and runtime exceptions.
+
+```sql
+CREATE TABLE IF NOT EXISTS app_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    module TEXT NOT NULL,
+    event_name TEXT NOT NULL,
+    message TEXT NOT NULL,
+    details TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_logs_timestamp 
+    ON app_logs (timestamp DESC);
+
+CREATE INDEX IF NOT EXISTS idx_logs_level 
+    ON app_logs (level);
+
+CREATE INDEX IF NOT EXISTS idx_logs_module 
+    ON app_logs (module);
+```
+
+#### Log Retention & Sanitization Policy
+- **Cap:** Automatically bounded to a maximum of 2,000 entries. Oldest entries are trimmed periodically to keep database size constant.
+- **Redaction:** Sensitive credentials (Google OAuth tokens, Bing API keys, passwords, client secrets) are scrubbed via `LogSanitizer` before disk persistence.
 
 ---
 

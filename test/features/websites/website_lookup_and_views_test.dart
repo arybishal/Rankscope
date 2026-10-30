@@ -88,6 +88,22 @@ class _FakeKeywordsRepository implements KeywordsRepository {
   Future<List<Map<String, dynamic>>> getCannibalizationAlerts(
     int websiteId,
   ) async => [];
+
+  @override
+  Future<Keyword> correlateSingleKeyword(Keyword keyword) async => keyword;
+
+  @override
+  Future<SearchSyncResult> syncPerformanceForWebsite({
+    required int websiteId,
+    required String domain,
+  }) async => const SearchSyncResult(
+    totalKeywords: 0,
+    matchedKeywords: 0,
+    googleQueriesAvailable: 0,
+    bingQueriesAvailable: 0,
+    googleConnected: false,
+    bingConnected: false,
+  );
 }
 
 void main() {

@@ -122,6 +122,26 @@ class _InMemoryKeywordsRepository implements KeywordsRepository {
   ) async {
     return [];
   }
+
+  @override
+  Future<Keyword> correlateSingleKeyword(Keyword keyword) async {
+    return keyword;
+  }
+
+  @override
+  Future<SearchSyncResult> syncPerformanceForWebsite({
+    required int websiteId,
+    required String domain,
+  }) async {
+    return SearchSyncResult(
+      totalKeywords: _keywords.length,
+      matchedKeywords: 0,
+      googleQueriesAvailable: 0,
+      bingQueriesAvailable: 0,
+      googleConnected: false,
+      bingConnected: false,
+    );
+  }
 }
 
 void main() {

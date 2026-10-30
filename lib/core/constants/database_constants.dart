@@ -3,7 +3,7 @@ class DatabaseConstants {
   DatabaseConstants._();
 
   static const String databaseName = 'rankscope.db';
-  static const int databaseVersion = 3;
+  static const int databaseVersion = 4;
 
   // Table Names
   static const String tableWebsites = 'websites';

@@ -1,24 +1,36 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:rankscope/core/theme/app_colors.dart';
 import 'package:rankscope/core/theme/app_text_styles.dart';
 import 'package:rankscope/core/theme/spacing.dart';
+import 'package:rankscope/core/utils/date_formatter.dart';
+import 'package:rankscope/core/utils/url_validator.dart';
 import 'package:rankscope/features/keywords/presentation/controllers/keywords_controller.dart';
 import 'package:rankscope/features/keywords/presentation/views/keyword_details_view.dart';
 import 'package:rankscope/features/reporting/data/generators/csv_report_generator.dart';
 import 'package:rankscope/features/reporting/data/generators/pdf_report_generator.dart';
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
 import 'package:rankscope/shared/widgets/cards/rank_metric_card.dart';
-import 'package:rankscope/shared/widgets/cards/ranking_badge.dart';
 import 'package:rankscope/shared/widgets/dialogs/add_keyword_dialog.dart';
 import 'package:rankscope/shared/widgets/dialogs/add_website_dialog.dart';
 import 'package:rankscope/shared/widgets/dialogs/log_rank_dialog.dart';
 import 'package:rankscope/shared/widgets/feedback/empty_state_view.dart';
 import 'package:share_plus/share_plus.dart';
+
+final googleConfiguredProvider = FutureProvider<bool>((ref) async {
+  final service = SearchPerformanceSyncService();
+  return await service.isGoogleConfigured();
+});
+
+final bingConfiguredProvider = FutureProvider<bool>((ref) async {
+  final service = SearchPerformanceSyncService();
+  return await service.isBingConfigured();
+});
 
 class DashboardView extends ConsumerWidget {
   const DashboardView({super.key});
@@ -85,21 +97,18 @@ class DashboardView extends ConsumerWidget {
 
 enum _KeywordFilter {
   all,
-  ranking,
-  notRanking,
-  improved,
-  declined,
-  newKeywords,
-  lostKeywords,
-  cannibalization,
+  hasData,
+  matchesTarget,
+  differentPage,
+  noData,
   paused,
 }
 
 enum _SortOption {
-  bestRank,
-  worstRank,
-  biggestGain,
-  biggestDrop,
+  bestGoogleRank,
+  bestBingRank,
+  mostImpressions,
+  mostClicks,
   alphabetical,
   recentlyChecked,
 }
@@ -117,7 +126,7 @@ class _DashboardContent extends ConsumerStatefulWidget {
 class _DashboardContentState extends ConsumerState<_DashboardContent> {
   String _selectedEngine = 'All'; // 'All', 'Google', 'Bing'
   _KeywordFilter _filter = _KeywordFilter.all;
-  _SortOption _sort = _SortOption.bestRank;
+  _SortOption _sort = _SortOption.bestGoogleRank;
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -130,6 +139,9 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
   @override
   Widget build(BuildContext context) {
     final keywordsState = ref.watch(keywordsFamilyProvider(widget.website.id!));
+    final syncState = ref.watch(searchPerformanceSyncProvider);
+    final googleConfigured = ref.watch(googleConfiguredProvider).value ?? false;
+    final bingConfigured = ref.watch(bingConfiguredProvider).value ?? false;
 
     return RefreshIndicator(
       color: AppColors.accent,
@@ -137,6 +149,8 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
         await ref
             .read(keywordsFamilyProvider(widget.website.id!).notifier)
             .loadKeywords();
+        ref.invalidate(googleConfiguredProvider);
+        ref.invalidate(bingConfiguredProvider);
       },
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -145,11 +159,20 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
           _buildWebsiteSelectorRow(context),
           const SizedBox(height: AppSpacing.md),
 
+          // Primary Search Performance Sync Banner & Trigger
+          _buildPerformanceSyncBanner(
+            context,
+            syncState,
+            googleConfigured,
+            bingConfigured,
+          ),
+          const SizedBox(height: AppSpacing.md),
+
           // Search Engine Switcher Tabs (All / Google / Bing)
           _buildSearchEngineFilterTabs(),
           const SizedBox(height: AppSpacing.md),
 
-          // KPI Intelligence Grid
+          // KPI Performance Summary Grid
           keywordsState.when(
             loading: () => const Center(
               child: Padding(
@@ -159,7 +182,12 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
             ),
             error: (e, _) => Text('Error loading keywords: $e'),
             data: (keywords) {
-              return _buildKpiAndKeywordList(context, keywords);
+              return _buildKpiAndKeywordList(
+                context,
+                keywords,
+                googleConfigured,
+                bingConfigured,
+              );
             },
           ),
         ],
@@ -252,14 +280,179 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
     );
   }
 
+  Widget _buildPerformanceSyncBanner(
+    BuildContext context,
+    SearchPerformanceSyncState syncState,
+    bool googleConfigured,
+    bool bingConfigured,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.hub_outlined, size: 20, color: AppColors.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Search Performance Sync',
+                      style: AppTextStyles.titleMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Correlate saved keywords with live search query data',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                icon: syncState.isSyncing
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.sync, size: 16),
+                label: Text(
+                  syncState.isSyncing ? 'Syncing...' : 'Sync Performance',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onPressed: syncState.isSyncing
+                    ? null
+                    : () async {
+                        final res = await ref
+                            .read(searchPerformanceSyncProvider.notifier)
+                            .syncPerformance(
+                              websiteId: widget.website.id!,
+                              domain: widget.website.domain,
+                            );
+                        if (context.mounted && res != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Sync completed: ${res.matchedKeywords} of ${res.totalKeywords} keywords matched (${res.googleQueriesAvailable} GSC / ${res.bingQueriesAvailable} Bing queries)',
+                              ),
+                              backgroundColor: AppColors.accent,
+                            ),
+                          );
+                        }
+                      },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          const SizedBox(height: 8),
+          // Engine Connection Status Pills
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              _buildConnectionStatusChip(
+                engine: 'Google Search Console',
+                isConnected: googleConfigured,
+                icon: Icons.search,
+              ),
+              _buildConnectionStatusChip(
+                engine: 'Bing Webmaster',
+                isConnected: bingConfigured,
+                icon: Icons.travel_explore,
+              ),
+            ],
+          ),
+          if (syncState.errorMessage != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              syncState.errorMessage!,
+              style: const TextStyle(fontSize: 11, color: AppColors.rankDrop),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectionStatusChip({
+    required String engine,
+    required bool isConnected,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isConnected ? const Color(0xFFF0FDF4) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: isConnected
+              ? const Color(0xFFBBF7D0)
+              : const Color(0xFFCBD5E1),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 13,
+            color: isConnected
+                ? const Color(0xFF16A34A)
+                : AppColors.textSecondary,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '$engine: ${isConnected ? 'Connected' : 'Not Configured'}',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isConnected
+                  ? const Color(0xFF16A34A)
+                  : AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSearchEngineFilterTabs() {
     return Row(
       children: [
         _buildEngineChip('All Engines', 'All', Icons.apps),
         const SizedBox(width: AppSpacing.xs),
-        _buildEngineChip('Google', 'Google', Icons.search),
+        _buildEngineChip('Google (GSC)', 'Google', Icons.search),
         const SizedBox(width: AppSpacing.xs),
-        _buildEngineChip('Bing', 'Bing', Icons.travel_explore),
+        _buildEngineChip('Bing (Webmaster)', 'Bing', Icons.travel_explore),
       ],
     );
   }
@@ -309,34 +502,51 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
   Widget _buildKpiAndKeywordList(
     BuildContext context,
     List<Keyword> allKeywords,
+    bool googleConfigured,
+    bool bingConfigured,
   ) {
-    // Engine scope filter
-    final engineKeywords = _selectedEngine == 'All'
-        ? allKeywords
-        : allKeywords.where((k) => k.searchEngine == _selectedEngine).toList();
+    final total = allKeywords.length;
+    final withData = allKeywords.where((k) {
+      if (_selectedEngine == 'Google') return k.hasGoogleData;
+      if (_selectedEngine == 'Bing') return k.hasBingData;
+      return k.hasPerformanceData;
+    }).length;
 
-    final total = engineKeywords.length;
-    final rankingCount = engineKeywords
-        .where(
-          (k) =>
-              k.positionFor(_selectedEngine) != null &&
-              k.positionFor(_selectedEngine)! > 0,
-        )
-        .length;
-    final notRankingCount = engineKeywords
-        .where((k) => k.positionFor(_selectedEngine) == 0)
-        .length;
-    final improvedCount = engineKeywords
-        .where((k) => k.deltaFor(_selectedEngine) > 0)
-        .length;
-    final declinedCount = engineKeywords
-        .where((k) => k.deltaFor(_selectedEngine) < 0)
-        .length;
-    final cannibalizationCount = engineKeywords
-        .where((k) => k.hasCannibalization)
-        .length;
-    final newCount = engineKeywords.where((k) => k.isNew).length;
-    final lostCount = engineKeywords.where((k) => k.isLost).length;
+    // Calculate aggregated metrics for active engine
+    int totalImpressions = 0;
+    int totalClicks = 0;
+    double avgPosSum = 0.0;
+    int rankedKeywordsCount = 0;
+
+    for (final kw in allKeywords) {
+      if (_selectedEngine == 'Google') {
+        totalImpressions += kw.googleImpressions;
+        totalClicks += kw.googleClicks;
+        if (kw.googleAveragePosition != null && kw.googleAveragePosition! > 0) {
+          avgPosSum += kw.googleAveragePosition!;
+          rankedKeywordsCount++;
+        }
+      } else if (_selectedEngine == 'Bing') {
+        totalImpressions += kw.bingImpressions;
+        totalClicks += kw.bingClicks;
+        if (kw.bingAveragePosition != null && kw.bingAveragePosition! > 0) {
+          avgPosSum += kw.bingAveragePosition!;
+          rankedKeywordsCount++;
+        }
+      } else {
+        totalImpressions += kw.googleImpressions + kw.bingImpressions;
+        totalClicks += kw.googleClicks + kw.bingClicks;
+        final avg = kw.googleAveragePosition ?? kw.bingAveragePosition;
+        if (avg != null && avg > 0) {
+          avgPosSum += avg;
+          rankedKeywordsCount++;
+        }
+      }
+    }
+
+    final overallAvgPos = rankedKeywordsCount > 0
+        ? (avgPosSum / rankedKeywordsCount).toStringAsFixed(1)
+        : '—';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,84 +555,44 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
         Row(
           children: [
             Expanded(
-              child: InkWell(
-                onTap: () => setState(() => _filter = _KeywordFilter.all),
-                child: RankMetricCard(
-                  title: 'Tracked',
-                  value: '$total',
-                  subtitle: _selectedEngine == 'All'
-                      ? 'All Engines'
-                      : _selectedEngine,
-                ),
+              child: RankMetricCard(
+                title: 'Tracked Keywords',
+                value: '$total',
+                subtitle: _selectedEngine == 'All'
+                    ? 'All Engines'
+                    : _selectedEngine,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
-              child: InkWell(
-                onTap: () => setState(() => _filter = _KeywordFilter.ranking),
-                child: RankMetricCard(
-                  title: 'Ranking',
-                  value: '$rankingCount',
-                  subtitle: 'Positions 1-100',
-                ),
+              child: RankMetricCard(
+                title: 'With Search Data',
+                value: '$withData',
+                subtitle: '$withData of $total keywords',
               ),
             ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
 
-        // 2nd Row of KPIs
+        // 2nd Row of KPIs: Avg Position & Clicks
         Row(
           children: [
             Expanded(
-              child: InkWell(
-                onTap: () =>
-                    setState(() => _filter = _KeywordFilter.notRanking),
-                child: RankMetricCard(
-                  title: 'Not Ranking',
-                  value: '$notRankingCount',
-                  subtitle: 'Position 0',
-                ),
+              child: RankMetricCard(
+                title: 'Average Position',
+                value: overallAvgPos,
+                subtitle: rankedKeywordsCount > 0
+                    ? 'Across $rankedKeywordsCount queries'
+                    : 'No rank data yet',
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
-              child: InkWell(
-                onTap: () => setState(() => _filter = _KeywordFilter.improved),
-                child: RankMetricCard(
-                  title: 'Improved',
-                  value: '+$improvedCount',
-                  subtitle: 'Rank Gains',
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-
-        // 3rd Row of KPIs (Cannibalization / Movements)
-        Row(
-          children: [
-            Expanded(
-              child: InkWell(
-                onTap: () => setState(() => _filter = _KeywordFilter.declined),
-                child: RankMetricCard(
-                  title: 'Declined',
-                  value: '-$declinedCount',
-                  subtitle: 'Rank Drops',
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: InkWell(
-                onTap: () =>
-                    setState(() => _filter = _KeywordFilter.cannibalization),
-                child: RankMetricCard(
-                  title: 'Cannibalization',
-                  value: '$cannibalizationCount',
-                  subtitle: 'Alerts Detected',
-                ),
+              child: RankMetricCard(
+                title: 'Total Impressions',
+                value: _formatNumber(totalImpressions),
+                subtitle: '${_formatNumber(totalClicks)} clicks',
               ),
             ),
           ],
@@ -448,11 +618,22 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
                   : () => _exportCsv(context, widget.website, allKeywords),
             ),
             const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.add, color: AppColors.textPrimary),
-              tooltip: 'Add Keyword',
-              onPressed: () =>
-                  _openAddKeywordDialog(context, ref, widget.website.id!),
+            Tooltip(
+              message: 'Add Keyword',
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                ),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add Keyword'),
+                onPressed: () =>
+                    _openAddKeywordDialog(context, ref, widget.website.id!),
+              ),
             ),
           ],
         ),
@@ -464,7 +645,7 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
           onChanged: (val) =>
               setState(() => _searchQuery = val.trim().toLowerCase()),
           decoration: InputDecoration(
-            hintText: 'Search queries or landing pages...',
+            hintText: 'Search keywords, landing pages, or target URLs...',
             prefixIcon: const Icon(Icons.search, size: 20),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
@@ -487,41 +668,31 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
               _buildFilterChoice('All', _KeywordFilter.all, total),
               const SizedBox(width: 6),
               _buildFilterChoice(
-                'Ranking',
-                _KeywordFilter.ranking,
-                rankingCount,
+                'Data Available',
+                _KeywordFilter.hasData,
+                withData,
               ),
               const SizedBox(width: 6),
               _buildFilterChoice(
-                'Not Ranking (0)',
-                _KeywordFilter.notRanking,
-                notRankingCount,
+                'Matches Target URL',
+                _KeywordFilter.matchesTarget,
+                allKeywords
+                    .where((k) => k.urlMatchStatus == 'matches_target')
+                    .length,
               ),
               const SizedBox(width: 6),
               _buildFilterChoice(
-                'Improved (▲)',
-                _KeywordFilter.improved,
-                improvedCount,
+                'Different Page Ranking',
+                _KeywordFilter.differentPage,
+                allKeywords
+                    .where((k) => k.urlMatchStatus == 'different_page')
+                    .length,
               ),
               const SizedBox(width: 6),
               _buildFilterChoice(
-                'Declined (▼)',
-                _KeywordFilter.declined,
-                declinedCount,
-              ),
-              const SizedBox(width: 6),
-              _buildFilterChoice('New', _KeywordFilter.newKeywords, newCount),
-              const SizedBox(width: 6),
-              _buildFilterChoice(
-                'Lost',
-                _KeywordFilter.lostKeywords,
-                lostCount,
-              ),
-              const SizedBox(width: 6),
-              _buildFilterChoice(
-                'Cannibalization',
-                _KeywordFilter.cannibalization,
-                cannibalizationCount,
+                'No Data Yet',
+                _KeywordFilter.noData,
+                total - withData,
               ),
               const SizedBox(width: 6),
               _buildFilterChoice(
@@ -538,26 +709,26 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Tracked Keywords', style: AppTextStyles.titleMedium),
+            const Text('Keyword Rankings', style: AppTextStyles.titleMedium),
             DropdownButtonHideUnderline(
               child: DropdownButton<_SortOption>(
                 value: _sort,
                 items: const [
                   DropdownMenuItem(
-                    value: _SortOption.bestRank,
-                    child: Text('Sort: Best Rank'),
+                    value: _SortOption.bestGoogleRank,
+                    child: Text('Sort: Best Google Rank'),
                   ),
                   DropdownMenuItem(
-                    value: _SortOption.worstRank,
-                    child: Text('Sort: Worst Rank'),
+                    value: _SortOption.bestBingRank,
+                    child: Text('Sort: Best Bing Rank'),
                   ),
                   DropdownMenuItem(
-                    value: _SortOption.biggestGain,
-                    child: Text('Sort: Biggest Gain'),
+                    value: _SortOption.mostImpressions,
+                    child: Text('Sort: Most Impressions'),
                   ),
                   DropdownMenuItem(
-                    value: _SortOption.biggestDrop,
-                    child: Text('Sort: Biggest Drop'),
+                    value: _SortOption.mostClicks,
+                    child: Text('Sort: Most Clicks'),
                   ),
                   DropdownMenuItem(
                     value: _SortOption.alphabetical,
@@ -581,8 +752,13 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
         ),
         const SizedBox(height: AppSpacing.xs),
 
-        // Filtered and Sorted Keyword List
-        _buildKeywordItemsList(context, engineKeywords),
+        // Filtered and Sorted Keyword Ranking Items
+        _buildKeywordItemsList(
+          context,
+          allKeywords,
+          googleConfigured,
+          bingConfigured,
+        ),
       ],
     );
   }
@@ -608,38 +784,41 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
     );
   }
 
-  Widget _buildKeywordItemsList(BuildContext context, List<Keyword> keywords) {
-    // 1. Filter by category
+  Widget _buildKeywordItemsList(
+    BuildContext context,
+    List<Keyword> keywords,
+    bool googleConfigured,
+    bool bingConfigured,
+  ) {
+    // 1. Filter
     List<Keyword> filtered = keywords.where((k) {
       if (_searchQuery.isNotEmpty) {
         final matchesText = k.keywordText.toLowerCase().contains(_searchQuery);
-        final matchesUrl =
-            k.rankingUrl?.toLowerCase().contains(_searchQuery) ?? false;
+        final matchesGoogleUrl =
+            k.googleRankingUrl?.toLowerCase().contains(_searchQuery) ?? false;
+        final matchesBingUrl =
+            k.bingRankingUrl?.toLowerCase().contains(_searchQuery) ?? false;
         final matchesTarget =
             k.targetUrl?.toLowerCase().contains(_searchQuery) ?? false;
-        if (!matchesText && !matchesUrl && !matchesTarget) return false;
+        if (!matchesText &&
+            !matchesGoogleUrl &&
+            !matchesBingUrl &&
+            !matchesTarget) {
+          return false;
+        }
       }
-
-      final pos = k.positionFor(_selectedEngine);
-      final delta = k.deltaFor(_selectedEngine);
 
       switch (_filter) {
         case _KeywordFilter.all:
           return true;
-        case _KeywordFilter.ranking:
-          return pos != null && pos > 0;
-        case _KeywordFilter.notRanking:
-          return pos == 0;
-        case _KeywordFilter.improved:
-          return delta > 0;
-        case _KeywordFilter.declined:
-          return delta < 0;
-        case _KeywordFilter.newKeywords:
-          return k.isNew;
-        case _KeywordFilter.lostKeywords:
-          return k.isLost;
-        case _KeywordFilter.cannibalization:
-          return k.hasCannibalization;
+        case _KeywordFilter.hasData:
+          return k.hasPerformanceData;
+        case _KeywordFilter.matchesTarget:
+          return k.urlMatchStatus == 'matches_target';
+        case _KeywordFilter.differentPage:
+          return k.urlMatchStatus == 'different_page';
+        case _KeywordFilter.noData:
+          return !k.hasPerformanceData;
         case _KeywordFilter.paused:
           return !k.isActive;
       }
@@ -647,20 +826,23 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
 
     // 2. Sort
     filtered.sort((a, b) {
-      final posA = a.positionFor(_selectedEngine) ?? 999;
-      final posB = b.positionFor(_selectedEngine) ?? 999;
-      final deltaA = a.deltaFor(_selectedEngine);
-      final deltaB = b.deltaFor(_selectedEngine);
-
       switch (_sort) {
-        case _SortOption.bestRank:
+        case _SortOption.bestGoogleRank:
+          final posA = a.googleAveragePosition ?? 999.0;
+          final posB = b.googleAveragePosition ?? 999.0;
           return posA.compareTo(posB);
-        case _SortOption.worstRank:
-          return posB.compareTo(posA);
-        case _SortOption.biggestGain:
-          return deltaB.compareTo(deltaA);
-        case _SortOption.biggestDrop:
-          return deltaA.compareTo(deltaB);
+        case _SortOption.bestBingRank:
+          final posA = a.bingAveragePosition ?? 999.0;
+          final posB = b.bingAveragePosition ?? 999.0;
+          return posA.compareTo(posB);
+        case _SortOption.mostImpressions:
+          final impA = a.googleImpressions + a.bingImpressions;
+          final impB = b.googleImpressions + b.bingImpressions;
+          return impB.compareTo(impA);
+        case _SortOption.mostClicks:
+          final clkA = a.googleClicks + a.bingClicks;
+          final clkB = b.googleClicks + b.bingClicks;
+          return clkB.compareTo(clkA);
         case _SortOption.alphabetical:
           return a.keywordText.toLowerCase().compareTo(
             b.keywordText.toLowerCase(),
@@ -693,13 +875,24 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
 
     return Column(
       children: filtered.map((k) {
-        return _KeywordTile(
+        return _KeywordRankingCard(
           keyword: k,
           website: widget.website,
           selectedEngine: _selectedEngine,
+          googleConfigured: googleConfigured,
+          bingConfigured: bingConfigured,
         );
       }).toList(),
     );
+  }
+
+  String _formatNumber(int n) {
+    if (n >= 1000000) {
+      return '${(n / 1000000).toStringAsFixed(1)}M';
+    } else if (n >= 1000) {
+      return '${(n / 1000).toStringAsFixed(1)}K';
+    }
+    return n.toString();
   }
 
   Future<void> _exportPdf(
@@ -835,28 +1028,29 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
   }
 }
 
-class _KeywordTile extends ConsumerWidget {
+/// Rich Keyword Ranking Card displaying Google Search Console and Bing Webmaster
+/// performance data side-by-side with target URL matching.
+class _KeywordRankingCard extends ConsumerWidget {
   final Keyword keyword;
   final Website website;
   final String selectedEngine;
+  final bool googleConfigured;
+  final bool bingConfigured;
 
-  const _KeywordTile({
+  const _KeywordRankingCard({
     required this.keyword,
     required this.website,
     required this.selectedEngine,
+    required this.googleConfigured,
+    required this.bingConfigured,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pos = keyword.positionFor(selectedEngine);
-    final delta = keyword.deltaFor(selectedEngine);
-
-    String? statusLabel;
-    if (!keyword.isActive) {
-      statusLabel = 'Paused';
-    } else if (pos == null) {
-      statusLabel = 'Pending';
-    }
+    final showGoogle =
+        selectedEngine == 'All' || selectedEngine.toLowerCase() == 'google';
+    final showBing =
+        selectedEngine == 'All' || selectedEngine.toLowerCase() == 'bing';
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -880,15 +1074,10 @@ class _KeywordTile extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Top Header: Keyword Query Text & Target URL
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  RankingBadge(
-                    position: pos,
-                    delta: delta,
-                    statusLabel: statusLabel,
-                  ),
-                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -898,22 +1087,40 @@ class _KeywordTile extends ConsumerWidget {
                             Flexible(
                               child: Text(
                                 keyword.keywordText,
-                                style: AppTextStyles.labelLarge,
-                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.titleMedium.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 6),
-                            Icon(
-                              keyword.searchEngine == 'Bing'
-                                  ? Icons.travel_explore
-                                  : Icons.search,
-                              size: 14,
-                              color: AppColors.textSecondary,
-                            ),
+                            if (!keyword.isActive) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'PAUSED',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
-                        const SizedBox(height: 2),
-                        Row(
+                        const SizedBox(height: 4),
+                        // Metadata badges: Country, Device
+                        Wrap(
+                          spacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
                               keyword.targetCity != null
@@ -921,15 +1128,49 @@ class _KeywordTile extends ConsumerWidget {
                                   : keyword.targetCountry,
                               style: AppTextStyles.bodySmall,
                             ),
-                            const SizedBox(width: 6),
                             Text('•', style: AppTextStyles.bodySmall),
-                            const SizedBox(width: 6),
                             Text(
                               keyword.device,
                               style: AppTextStyles.bodySmall,
                             ),
+                            if (keyword.tags.isNotEmpty) ...[
+                              Text('•', style: AppTextStyles.bodySmall),
+                              Text(
+                                keyword.tags.join(', '),
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: AppColors.accent,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
+                        // Expected Target URL
+                        if (keyword.targetUrl != null &&
+                            keyword.targetUrl!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Text(
+                                '🎯 Target: ',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  keyword.targetUrl!,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    fontSize: 11,
+                                    color: AppColors.accent,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -941,7 +1182,7 @@ class _KeywordTile extends ConsumerWidget {
                     ),
                     onSelected: (val) {
                       switch (val) {
-                        case 'log_rank':
+                        case 'log_serp':
                           showDialog(
                             context: context,
                             builder: (ctx) => LogRankDialog(
@@ -978,12 +1219,12 @@ class _KeywordTile extends ConsumerWidget {
                     },
                     itemBuilder: (ctx) => [
                       const PopupMenuItem(
-                        value: 'log_rank',
+                        value: 'log_serp',
                         child: Row(
                           children: [
                             Icon(Icons.add_chart, size: 18),
                             SizedBox(width: 8),
-                            Text('Log SERP Rank'),
+                            Text('Log SERP Audit'),
                           ],
                         ),
                       ),
@@ -1007,7 +1248,7 @@ class _KeywordTile extends ConsumerWidget {
                                   : Icons.play_circle_outline,
                               size: 18,
                             ),
-                            const SizedBox(width: 8),
+                            SizedBox(width: 8),
                             Text(
                               keyword.isActive
                                   ? 'Pause Tracking'
@@ -1038,67 +1279,44 @@ class _KeywordTile extends ConsumerWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: AppSpacing.sm),
 
-              // Ranking URL indicator
-              if (keyword.rankingUrl != null &&
-                  keyword.rankingUrl!.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(Icons.link, size: 14, color: AppColors.accent),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        keyword.rankingUrl!,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+              // Search Engine Performance Cards
+              if (showGoogle) ...[
+                _buildEnginePerformanceBox(
+                  context: context,
+                  engineName: 'Google Search Console',
+                  dataLabel: 'Google Search Console Average Position',
+                  icon: Icons.search,
+                  brandColor: const Color(0xFF1D4ED8),
+                  avgPosition: keyword.googleAveragePosition,
+                  impressions: keyword.googleImpressions,
+                  clicks: keyword.googleClicks,
+                  ctr: keyword.googleCtr,
+                  rankingUrl: keyword.googleRankingUrl,
+                  targetUrl: keyword.targetUrl,
+                  syncedAt: keyword.googleSyncedAt,
+                  isConfigured: googleConfigured,
                 ),
               ],
 
-              // Badges for New, Lost, Cannibalization
-              if (keyword.isNew ||
-                  keyword.isLost ||
-                  keyword.isRecovered ||
-                  keyword.hasCannibalization) ...[
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    if (keyword.isNew)
-                      _BadgeChip(
-                        label: 'NEW',
-                        bgColor: const Color(0xFFEFF6FF),
-                        textColor: AppColors.accent,
-                      ),
-                    if (keyword.isLost)
-                      _BadgeChip(
-                        label: 'LOST',
-                        bgColor: const Color(0xFFFEF2F2),
-                        textColor: AppColors.rankDrop,
-                      ),
-                    if (keyword.isRecovered)
-                      _BadgeChip(
-                        label: 'RECOVERED',
-                        bgColor: const Color(0xFFF0FDF4),
-                        textColor: const Color(0xFF16A34A),
-                      ),
-                    if (keyword.hasCannibalization)
-                      _BadgeChip(
-                        label: keyword.cannibalizationStatus == 'url_switching'
-                            ? 'URL SWITCHING'
-                            : 'CANNIBALIZATION',
-                        bgColor: const Color(0xFFFFFBEB),
-                        textColor: const Color(0xFFB45309),
-                      ),
-                  ],
+              if (showGoogle && showBing) const SizedBox(height: 8),
+
+              if (showBing) ...[
+                _buildEnginePerformanceBox(
+                  context: context,
+                  engineName: 'Bing Webmaster',
+                  dataLabel: 'Bing Average Position',
+                  icon: Icons.travel_explore,
+                  brandColor: const Color(0xFF0F766E),
+                  avgPosition: keyword.bingAveragePosition,
+                  impressions: keyword.bingImpressions,
+                  clicks: keyword.bingClicks,
+                  ctr: keyword.bingCtr,
+                  rankingUrl: keyword.bingRankingUrl,
+                  targetUrl: keyword.targetUrl,
+                  syncedAt: keyword.bingSyncedAt,
+                  isConfigured: bingConfigured,
                 ),
               ],
             ],
@@ -1106,6 +1324,315 @@ class _KeywordTile extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildEnginePerformanceBox({
+    required BuildContext context,
+    required String engineName,
+    required String dataLabel,
+    required IconData icon,
+    required Color brandColor,
+    required double? avgPosition,
+    required int impressions,
+    required int clicks,
+    required double ctr,
+    required String? rankingUrl,
+    required String? targetUrl,
+    required DateTime? syncedAt,
+    required bool isConfigured,
+  }) {
+    final hasData = avgPosition != null && avgPosition > 0;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: Engine Header & Main Position Value
+          Row(
+            children: [
+              Icon(icon, size: 14, color: brandColor),
+              const SizedBox(width: 6),
+              Text(
+                dataLabel,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: brandColor,
+                ),
+              ),
+              const Spacer(),
+              if (hasData)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getPositionBadgeBg(avgPosition),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: _getPositionBadgeBorder(avgPosition),
+                    ),
+                  ),
+                  child: Text(
+                    avgPosition.toStringAsFixed(1),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: _getPositionTextColor(avgPosition),
+                    ),
+                  ),
+                )
+              else if (!isConfigured)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'Not Configured',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'No Impressions Yet',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+
+          if (hasData) ...[
+            const SizedBox(height: 6),
+            // Row 2: Metrics (Clicks, Impressions, CTR)
+            Row(
+              children: [
+                _buildMetricSnippet('Clicks', clicks.toString()),
+                const SizedBox(width: 12),
+                _buildMetricSnippet('Impressions', _formatNumber(impressions)),
+                const SizedBox(width: 12),
+                _buildMetricSnippet(
+                  'CTR',
+                  '${(ctr * 100).toStringAsFixed(1)}%',
+                ),
+                const Spacer(),
+                if (syncedAt != null)
+                  Text(
+                    'Synced ${DateFormatter.relativeTime(syncedAt)}',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+
+            // Row 3: Observed Ranking URL
+            if (rankingUrl != null && rankingUrl.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.link,
+                    size: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: GestureDetector(
+                      onLongPress: () {
+                        Clipboard.setData(ClipboardData(text: rankingUrl));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Ranking URL copied')),
+                        );
+                      },
+                      child: Text(
+                        rankingUrl,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          fontFamily: 'monospace',
+                          fontSize: 10.5,
+                          color: AppColors.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              // Target URL match evaluation
+              _buildTargetUrlMatchStatusBadge(targetUrl, rankingUrl),
+            ],
+          ] else ...[
+            const SizedBox(height: 4),
+            Text(
+              !isConfigured
+                  ? 'Connect $engineName to retrieve search queries, impressions, and average position.'
+                  : 'This query has not received search visibility or impressions in the current date range.',
+              style: const TextStyle(
+                fontSize: 10.5,
+                color: AppColors.textSecondary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricSnippet(String label, String value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$label: ',
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTargetUrlMatchStatusBadge(
+    String? targetUrl,
+    String? actualRankingUrl,
+  ) {
+    if (targetUrl == null || targetUrl.trim().isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: const Text(
+          'Target URL not specified',
+          style: TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      );
+    }
+
+    final isMatch = UrlValidator.urlsMatch(targetUrl, actualRankingUrl);
+
+    if (isMatch) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: const Color(0xFFBBF7D0)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, size: 10, color: Color(0xFF16A34A)),
+            SizedBox(width: 3),
+            Text(
+              'Matches Target Landing Page',
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF16A34A),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: const Color(0xFFFDE68A)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              size: 10,
+              color: Color(0xFFB45309),
+            ),
+            SizedBox(width: 3),
+            Text(
+              'Different Page Ranking (Expected Target Not Ranking)',
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFB45309),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Color _getPositionBadgeBg(double pos) {
+    if (pos <= 3.0) return const Color(0xFFFEF9C3);
+    if (pos <= 10.0) return const Color(0xFFEFF6FF);
+    return const Color(0xFFF1F5F9);
+  }
+
+  Color _getPositionBadgeBorder(double pos) {
+    if (pos <= 3.0) return const Color(0xFFFDE047);
+    if (pos <= 10.0) return const Color(0xFFBFDBFE);
+    return const Color(0xFFE2E8F0);
+  }
+
+  Color _getPositionTextColor(double pos) {
+    if (pos <= 3.0) return const Color(0xFF854D0E);
+    if (pos <= 10.0) return const Color(0xFF1D4ED8);
+    return AppColors.textPrimary;
+  }
+
+  String _formatNumber(int n) {
+    if (n >= 1000000) {
+      return '${(n / 1000000).toStringAsFixed(1)}M';
+    } else if (n >= 1000) {
+      return '${(n / 1000).toStringAsFixed(1)}K';
+    }
+    return n.toString();
   }
 
   void _confirmDeleteKeyword(
@@ -1153,38 +1680,6 @@ class _KeywordTile extends ConsumerWidget {
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BadgeChip extends StatelessWidget {
-  final String label;
-  final Color bgColor;
-  final Color textColor;
-
-  const _BadgeChip({
-    required this.label,
-    required this.bgColor,
-    required this.textColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(3),
-        border: Border.all(color: textColor.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          color: textColor,
-        ),
       ),
     );
   }

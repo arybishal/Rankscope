@@ -5,6 +5,12 @@ class RankObservation {
   final int websiteId;
   final String searchEngine; // 'Google' or 'Bing'
   final int position; // 1-100, or 0 if confirmed not found in checked range
+  final double?
+  averagePosition; // Statistical average from Search Console / Bing
+  final int clicks;
+  final int impressions;
+  final double ctr;
+  final String? metricDate; // YYYY-MM-DD
   final String? rankingUrl;
   final String? previousRankingUrl;
   final bool isUrlChange;
@@ -23,6 +29,11 @@ class RankObservation {
     required this.websiteId,
     this.searchEngine = 'Google',
     required this.position,
+    this.averagePosition,
+    this.clicks = 0,
+    this.impressions = 0,
+    this.ctr = 0.0,
+    this.metricDate,
     this.rankingUrl,
     this.previousRankingUrl,
     this.isUrlChange = false,
@@ -35,7 +46,9 @@ class RankObservation {
     this.notes,
   });
 
-  bool get isRanking => position > 0 && observationStatus == 'ranking';
+  bool get isRanking =>
+      (position > 0 || (averagePosition != null && averagePosition! > 0)) &&
+      observationStatus == 'ranking';
   bool get isNotRanking => position == 0 || observationStatus == 'not_ranking';
 
   factory RankObservation.fromMap(Map<String, dynamic> map) {
@@ -45,6 +58,11 @@ class RankObservation {
       websiteId: map['website_id'] as int,
       searchEngine: map['search_engine'] as String? ?? 'Google',
       position: map['position'] as int? ?? 0,
+      averagePosition: (map['average_position'] as num?)?.toDouble(),
+      clicks: map['clicks'] as int? ?? 0,
+      impressions: map['impressions'] as int? ?? 0,
+      ctr: (map['ctr'] as num?)?.toDouble() ?? 0.0,
+      metricDate: map['metric_date'] as String?,
       rankingUrl: map['ranking_url'] as String?,
       previousRankingUrl: map['previous_ranking_url'] as String?,
       isUrlChange: (map['is_url_change'] as int? ?? 0) == 1,
@@ -67,6 +85,11 @@ class RankObservation {
       'website_id': websiteId,
       'search_engine': searchEngine,
       'position': position,
+      'average_position': averagePosition,
+      'clicks': clicks,
+      'impressions': impressions,
+      'ctr': ctr,
+      'metric_date': metricDate,
       'ranking_url': rankingUrl,
       'previous_ranking_url': previousRankingUrl,
       'is_url_change': isUrlChange ? 1 : 0,
@@ -86,6 +109,11 @@ class RankObservation {
     int? websiteId,
     String? searchEngine,
     int? position,
+    double? averagePosition,
+    int? clicks,
+    int? impressions,
+    double? ctr,
+    String? metricDate,
     String? rankingUrl,
     String? previousRankingUrl,
     bool? isUrlChange,
@@ -103,6 +131,11 @@ class RankObservation {
       websiteId: websiteId ?? this.websiteId,
       searchEngine: searchEngine ?? this.searchEngine,
       position: position ?? this.position,
+      averagePosition: averagePosition ?? this.averagePosition,
+      clicks: clicks ?? this.clicks,
+      impressions: impressions ?? this.impressions,
+      ctr: ctr ?? this.ctr,
+      metricDate: metricDate ?? this.metricDate,
       rankingUrl: rankingUrl ?? this.rankingUrl,
       previousRankingUrl: previousRankingUrl ?? this.previousRankingUrl,
       isUrlChange: isUrlChange ?? this.isUrlChange,

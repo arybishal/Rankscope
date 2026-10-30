@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repositories/keywords_repository_impl.dart';
 import '../../domain/repositories/keywords_repository.dart';
 
+export '../../data/services/search_performance_sync_service.dart';
 export '../../domain/entities/keyword.dart';
 export '../../domain/entities/rank_observation.dart';
 export '../../domain/repositories/keywords_repository.dart';
@@ -10,6 +11,71 @@ export '../../domain/repositories/keywords_repository.dart';
 final keywordsRepositoryProvider = Provider<KeywordsRepository>((ref) {
   return KeywordsRepositoryImpl();
 });
+
+class SearchPerformanceSyncState {
+  final bool isSyncing;
+  final String? errorMessage;
+  final SearchSyncResult? lastResult;
+
+  const SearchPerformanceSyncState({
+    this.isSyncing = false,
+    this.errorMessage,
+    this.lastResult,
+  });
+
+  SearchPerformanceSyncState copyWith({
+    bool? isSyncing,
+    String? errorMessage,
+    SearchSyncResult? lastResult,
+  }) {
+    return SearchPerformanceSyncState(
+      isSyncing: isSyncing ?? this.isSyncing,
+      errorMessage: errorMessage,
+      lastResult: lastResult ?? this.lastResult,
+    );
+  }
+}
+
+class SearchPerformanceSyncNotifier
+    extends Notifier<SearchPerformanceSyncState> {
+  @override
+  SearchPerformanceSyncState build() => const SearchPerformanceSyncState();
+
+  Future<SearchSyncResult?> syncPerformance({
+    required int websiteId,
+    required String domain,
+  }) async {
+    state = state.copyWith(isSyncing: true, errorMessage: null);
+
+    try {
+      final repo = ref.read(keywordsRepositoryProvider);
+      final result = await repo.syncPerformanceForWebsite(
+        websiteId: websiteId,
+        domain: domain,
+      );
+
+      state = state.copyWith(
+        isSyncing: false,
+        lastResult: result,
+        errorMessage: null,
+      );
+
+      // Invalidate keyword list and observation views for instant UI updates
+      ref.invalidate(keywordsFamilyProvider(websiteId));
+      ref.invalidate(cannibalizationAlertsFamilyProvider(websiteId));
+
+      return result;
+    } catch (e) {
+      state = state.copyWith(isSyncing: false, errorMessage: 'Sync failed: $e');
+      return null;
+    }
+  }
+}
+
+final searchPerformanceSyncProvider =
+    NotifierProvider<SearchPerformanceSyncNotifier, SearchPerformanceSyncState>(
+      () => SearchPerformanceSyncNotifier(),
+    );
 
 class KeywordsNotifier extends AsyncNotifier<List<Keyword>> {
   final int websiteId;
@@ -94,6 +160,12 @@ class KeywordsNotifier extends AsyncNotifier<List<Keyword>> {
     ref.invalidate(keywordObservationsFamilyProvider(observation.keywordId));
     ref.invalidate(cannibalizationAlertsFamilyProvider(websiteId));
     return saved;
+  }
+
+  Future<SearchSyncResult?> syncPerformance(String domain) async {
+    return await ref
+        .read(searchPerformanceSyncProvider.notifier)
+        .syncPerformance(websiteId: websiteId, domain: domain);
   }
 }
 

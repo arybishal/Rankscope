@@ -13,7 +13,24 @@ class Keyword {
   final bool isActive;
   final String? rankingUrl; // Currently observed ranking page URL
 
-  // Search Engine Specific Positions
+  // Search Console & Search Performance Specific (Statistical Averages)
+  final double? googleAveragePosition;
+  final String? googleRankingUrl;
+  final int googleImpressions;
+  final int googleClicks;
+  final double googleCtr;
+  final DateTime? googleSyncedAt;
+
+  final double? bingAveragePosition;
+  final String? bingRankingUrl;
+  final int bingImpressions;
+  final int bingClicks;
+  final double bingCtr;
+  final DateTime? bingSyncedAt;
+
+  final String urlMatchStatus; // 'matches_target', 'different_page', 'no_target_set', 'no_ranking_url', 'unknown'
+
+  // Search Engine Specific Positions (SERP audit / integer observations)
   final int? googlePosition;
   final int? bingPosition;
   final int? googlePreviousPosition;
@@ -47,6 +64,19 @@ class Keyword {
     this.tags = const [],
     this.isActive = true,
     this.rankingUrl,
+    this.googleAveragePosition,
+    this.googleRankingUrl,
+    this.googleImpressions = 0,
+    this.googleClicks = 0,
+    this.googleCtr = 0.0,
+    this.googleSyncedAt,
+    this.bingAveragePosition,
+    this.bingRankingUrl,
+    this.bingImpressions = 0,
+    this.bingClicks = 0,
+    this.bingCtr = 0.0,
+    this.bingSyncedAt,
+    this.urlMatchStatus = 'unknown',
     this.googlePosition,
     this.bingPosition,
     this.googlePreviousPosition,
@@ -81,6 +111,65 @@ class Keyword {
     return googleDelta != 0 ? googleDelta : positionDelta;
   }
 
+  /// Helper to get search console / webmaster average position for an engine.
+  double? averagePositionFor(String engine) {
+    if (engine.toLowerCase() == 'bing') {
+      return bingAveragePosition;
+    }
+    if (engine.toLowerCase() == 'google') {
+      return googleAveragePosition;
+    }
+    return googleAveragePosition ?? bingAveragePosition;
+  }
+
+  /// Helper to get impressions for a given engine.
+  int impressionsFor(String engine) {
+    if (engine.toLowerCase() == 'bing') {
+      return bingImpressions;
+    }
+    if (engine.toLowerCase() == 'google') {
+      return googleImpressions;
+    }
+    return googleImpressions + bingImpressions;
+  }
+
+  /// Helper to get clicks for a given engine.
+  int clicksFor(String engine) {
+    if (engine.toLowerCase() == 'bing') {
+      return bingClicks;
+    }
+    if (engine.toLowerCase() == 'google') {
+      return googleClicks;
+    }
+    return googleClicks + bingClicks;
+  }
+
+  /// Helper to get ranking URL for a given engine.
+  String? performanceRankingUrlFor(String engine) {
+    if (engine.toLowerCase() == 'bing') {
+      return bingRankingUrl ?? rankingUrl;
+    }
+    if (engine.toLowerCase() == 'google') {
+      return googleRankingUrl ?? rankingUrl;
+    }
+    return googleRankingUrl ?? bingRankingUrl ?? rankingUrl;
+  }
+
+  /// Helper to get latest sync timestamp for a given engine.
+  DateTime? syncedAtFor(String engine) {
+    if (engine.toLowerCase() == 'bing') {
+      return bingSyncedAt;
+    }
+    if (engine.toLowerCase() == 'google') {
+      return googleSyncedAt;
+    }
+    if (googleSyncedAt == null) return bingSyncedAt;
+    if (bingSyncedAt == null) return googleSyncedAt;
+    return googleSyncedAt!.isAfter(bingSyncedAt!)
+        ? googleSyncedAt
+        : bingSyncedAt;
+  }
+
   /// True if keyword is actively ranking (position >= 1).
   bool isRankingIn(String? engine) {
     final pos = engine != null
@@ -102,6 +191,11 @@ class Keyword {
   bool get isRecovered => statusEvent == 'recovered';
   bool get hasCannibalization =>
       cannibalizationStatus != 'none' && cannibalizationStatus != 'resolved';
+
+  bool get hasGoogleData =>
+      googleAveragePosition != null || googleImpressions > 0;
+  bool get hasBingData => bingAveragePosition != null || bingImpressions > 0;
+  bool get hasPerformanceData => hasGoogleData || hasBingData;
 
   factory Keyword.fromMap(Map<String, dynamic> map) {
     final tagsRaw = map['tags'] as String?;
@@ -130,6 +224,24 @@ class Keyword {
       tags: parsedTags,
       isActive: (map['is_active'] as int? ?? 1) == 1,
       rankingUrl: map['ranking_url'] as String?,
+      googleAveragePosition: (map['google_average_position'] as num?)
+          ?.toDouble(),
+      googleRankingUrl: map['google_ranking_url'] as String?,
+      googleImpressions: map['google_impressions'] as int? ?? 0,
+      googleClicks: map['google_clicks'] as int? ?? 0,
+      googleCtr: (map['google_ctr'] as num?)?.toDouble() ?? 0.0,
+      googleSyncedAt: map['google_synced_at'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['google_synced_at'] as int)
+          : null,
+      bingAveragePosition: (map['bing_average_position'] as num?)?.toDouble(),
+      bingRankingUrl: map['bing_ranking_url'] as String?,
+      bingImpressions: map['bing_impressions'] as int? ?? 0,
+      bingClicks: map['bing_clicks'] as int? ?? 0,
+      bingCtr: (map['bing_ctr'] as num?)?.toDouble() ?? 0.0,
+      bingSyncedAt: map['bing_synced_at'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['bing_synced_at'] as int)
+          : null,
+      urlMatchStatus: map['url_match_status'] as String? ?? 'unknown',
       googlePosition: rawGooglePos,
       bingPosition: map['bing_position'] as int?,
       googlePreviousPosition:
@@ -173,6 +285,19 @@ class Keyword {
       'tags': tags.isEmpty ? null : tags.join(','),
       'is_active': isActive ? 1 : 0,
       'ranking_url': rankingUrl,
+      'google_average_position': googleAveragePosition,
+      'google_ranking_url': googleRankingUrl,
+      'google_impressions': googleImpressions,
+      'google_clicks': googleClicks,
+      'google_ctr': googleCtr,
+      'google_synced_at': googleSyncedAt?.millisecondsSinceEpoch,
+      'bing_average_position': bingAveragePosition,
+      'bing_ranking_url': bingRankingUrl,
+      'bing_impressions': bingImpressions,
+      'bing_clicks': bingClicks,
+      'bing_ctr': bingCtr,
+      'bing_synced_at': bingSyncedAt?.millisecondsSinceEpoch,
+      'url_match_status': urlMatchStatus,
       'google_position': googlePosition,
       'bing_position': bingPosition,
       'google_previous_position': googlePreviousPosition,
@@ -204,6 +329,19 @@ class Keyword {
     List<String>? tags,
     bool? isActive,
     String? rankingUrl,
+    double? googleAveragePosition,
+    String? googleRankingUrl,
+    int? googleImpressions,
+    int? googleClicks,
+    double? googleCtr,
+    DateTime? googleSyncedAt,
+    double? bingAveragePosition,
+    String? bingRankingUrl,
+    int? bingImpressions,
+    int? bingClicks,
+    double? bingCtr,
+    DateTime? bingSyncedAt,
+    String? urlMatchStatus,
     int? googlePosition,
     int? bingPosition,
     int? googlePreviousPosition,
@@ -233,6 +371,20 @@ class Keyword {
       tags: tags ?? this.tags,
       isActive: isActive ?? this.isActive,
       rankingUrl: rankingUrl ?? this.rankingUrl,
+      googleAveragePosition:
+          googleAveragePosition ?? this.googleAveragePosition,
+      googleRankingUrl: googleRankingUrl ?? this.googleRankingUrl,
+      googleImpressions: googleImpressions ?? this.googleImpressions,
+      googleClicks: googleClicks ?? this.googleClicks,
+      googleCtr: googleCtr ?? this.googleCtr,
+      googleSyncedAt: googleSyncedAt ?? this.googleSyncedAt,
+      bingAveragePosition: bingAveragePosition ?? this.bingAveragePosition,
+      bingRankingUrl: bingRankingUrl ?? this.bingRankingUrl,
+      bingImpressions: bingImpressions ?? this.bingImpressions,
+      bingClicks: bingClicks ?? this.bingClicks,
+      bingCtr: bingCtr ?? this.bingCtr,
+      bingSyncedAt: bingSyncedAt ?? this.bingSyncedAt,
+      urlMatchStatus: urlMatchStatus ?? this.urlMatchStatus,
       googlePosition: googlePosition ?? this.googlePosition,
       bingPosition: bingPosition ?? this.bingPosition,
       googlePreviousPosition:

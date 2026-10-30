@@ -1,8 +1,10 @@
 import '../entities/keyword.dart';
 import '../entities/rank_observation.dart';
+import '../../data/services/search_performance_sync_service.dart';
 
 export '../entities/keyword.dart';
 export '../entities/rank_observation.dart';
+export '../../data/services/search_performance_sync_service.dart';
 
 /// Repository interface for Keyword and Rank Observation operations.
 abstract class KeywordsRepository {
@@ -47,4 +49,14 @@ abstract class KeywordsRepository {
   });
 
   Future<List<Map<String, dynamic>>> getCannibalizationAlerts(int websiteId);
+
+  /// Synchronizes search console and Bing metrics for this website and correlates
+  /// all tracked keywords.
+  Future<SearchSyncResult> syncPerformanceForWebsite({
+    required int websiteId,
+    required String domain,
+  });
+
+  /// Immediately correlates a single keyword against local Search Console and Bing data.
+  Future<Keyword> correlateSingleKeyword(Keyword keyword);
 }

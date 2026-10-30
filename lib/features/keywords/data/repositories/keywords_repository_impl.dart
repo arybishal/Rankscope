@@ -5,9 +5,13 @@ import '../datasources/local_keywords_datasource.dart';
 /// Implementation of [KeywordsRepository].
 class KeywordsRepositoryImpl implements KeywordsRepository {
   final LocalKeywordsDatasource _localDatasource;
+  final SearchPerformanceSyncService _syncService;
 
-  KeywordsRepositoryImpl({LocalKeywordsDatasource? localDatasource})
-    : _localDatasource = localDatasource ?? LocalKeywordsDatasource();
+  KeywordsRepositoryImpl({
+    LocalKeywordsDatasource? localDatasource,
+    SearchPerformanceSyncService? syncService,
+  }) : _localDatasource = localDatasource ?? LocalKeywordsDatasource(),
+       _syncService = syncService ?? SearchPerformanceSyncService();
 
   @override
   Future<List<Keyword>> getKeywordsByWebsite(
@@ -83,7 +87,9 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
           'This keyword is already being tracked with this search engine and location.',
         );
       }
-      return await _localDatasource.insertKeyword(keyword);
+      final inserted = await _localDatasource.insertKeyword(keyword);
+      // Immediately correlate newly created keyword with existing search console data
+      return await _syncService.correlateSingleKeyword(inserted);
     } on Failure {
       rethrow;
     } catch (e) {
@@ -94,7 +100,12 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
   @override
   Future<List<Keyword>> addKeywordsBatch(List<Keyword> keywords) async {
     try {
-      return await _localDatasource.insertKeywordsBatch(keywords);
+      final insertedList = await _localDatasource.insertKeywordsBatch(keywords);
+      final List<Keyword> correlated = [];
+      for (final kw in insertedList) {
+        correlated.add(await _syncService.correlateSingleKeyword(kw));
+      }
+      return correlated;
     } catch (e) {
       throw DatabaseFailure('Failed to batch insert keywords: $e');
     }
@@ -119,6 +130,7 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
         );
       }
       await _localDatasource.updateKeyword(keyword);
+      await _syncService.correlateSingleKeyword(keyword);
     } on Failure {
       rethrow;
     } catch (e) {
@@ -187,6 +199,30 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
       return await _localDatasource.getCannibalizationAlerts(websiteId);
     } catch (e) {
       throw DatabaseFailure('Failed to fetch cannibalization alerts: $e');
+    }
+  }
+
+  @override
+  Future<SearchSyncResult> syncPerformanceForWebsite({
+    required int websiteId,
+    required String domain,
+  }) async {
+    try {
+      return await _syncService.syncPerformanceForWebsite(
+        websiteId: websiteId,
+        domain: domain,
+      );
+    } catch (e) {
+      throw DatabaseFailure('Failed to sync search performance: $e');
+    }
+  }
+
+  @override
+  Future<Keyword> correlateSingleKeyword(Keyword keyword) async {
+    try {
+      return await _syncService.correlateSingleKeyword(keyword);
+    } catch (e) {
+      return keyword;
     }
   }
 }

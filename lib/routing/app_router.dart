@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../features/bing_webmaster/presentation/views/bing_webmaster_view.dart';
 import '../features/dashboard/presentation/views/dashboard_view.dart';
 import '../features/manual_tracking/presentation/views/manual_tracking_view.dart';
+import '../features/onboarding/presentation/views/onboarding_view.dart';
 import '../features/search_console/presentation/views/search_console_view.dart';
 import '../features/settings/presentation/views/logs_view.dart';
 import '../features/settings/presentation/views/settings_view.dart';
@@ -12,11 +13,19 @@ import 'navigation_shell.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
-/// Declarative GoRouter routing tree for RankScope.
-final GoRouter appRouter = GoRouter(
+/// Factory to generate declarative GoRouter routing tree for RankScope.
+GoRouter createAppRouter({String initialLocation = '/dashboard'}) => GoRouter(
   navigatorKey: _rootNavigatorKey,
-  initialLocation: '/dashboard',
+  initialLocation: initialLocation,
   routes: [
+    GoRoute(
+      path: '/onboarding',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final isRevisit = state.uri.queryParameters['revisit'] == 'true';
+        return OnboardingView(isRevisit: isRevisit);
+      },
+    ),
     GoRoute(
       path: '/logs',
       parentNavigatorKey: _rootNavigatorKey,
@@ -85,3 +94,6 @@ final GoRouter appRouter = GoRouter(
     ),
   ],
 );
+
+/// Default static router instance for backward compatibility.
+final GoRouter appRouter = createAppRouter();

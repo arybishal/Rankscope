@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/database/app_database.dart';
 import 'core/logging/app_logger.dart';
+import 'core/security/secure_storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,5 +41,22 @@ void main() async {
     'RankScope engine initialized',
   );
 
-  runApp(const ProviderScope(child: RankScopeApp()));
+  // Check first-time install onboarding completion
+  String initialRoute = '/dashboard';
+  try {
+    final storage = SecureStorageService();
+    final hasCompleted = await storage.hasCompletedOnboarding();
+    if (!hasCompleted) {
+      initialRoute = '/onboarding';
+    }
+  } catch (e, stack) {
+    await AppLogger.instance.error(
+      'App',
+      'onboarding_check_failed',
+      'Could not verify onboarding state: $e',
+      stackTrace: stack,
+    );
+  }
+
+  runApp(ProviderScope(child: RankScopeApp(initialLocation: initialRoute)));
 }

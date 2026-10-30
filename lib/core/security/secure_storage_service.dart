@@ -16,6 +16,21 @@ class SecureStorageService {
   static const String _keyGscTokenExpiry = 'gsc_token_expiry';
   static const String _keyGscClientId = 'gsc_client_id';
   static const String _keyBingApiKey = 'bing_api_key';
+  static const String _keyHasCompletedOnboarding = 'has_completed_onboarding';
+
+  // --- Onboarding Status ---
+
+  Future<void> setCompletedOnboarding(bool completed) async {
+    await _storage.write(
+      key: _keyHasCompletedOnboarding,
+      value: completed ? 'true' : 'false',
+    );
+  }
+
+  Future<bool> hasCompletedOnboarding() async {
+    final val = await _storage.read(key: _keyHasCompletedOnboarding);
+    return val == 'true';
+  }
 
   // --- Google Search Console Credentials ---
 

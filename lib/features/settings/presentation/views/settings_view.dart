@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -490,8 +491,14 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         children: [
           Icon(icon, size: 16, color: AppColors.textSecondary),
           const SizedBox(width: 8),
-          Text(label, style: AppTextStyles.bodyMedium),
-          const Spacer(),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.bodyMedium,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
           Text(value, style: AppTextStyles.labelLarge),
         ],
       ),
@@ -590,6 +597,13 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   title: 'Manage Tracked Websites',
                   description: 'Add new websites, configure competitors, view Bing verification status, and switch active properties.',
                   onTap: () => context.push('/websites'),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _SettingsNavCard(
+                  icon: Icons.auto_awesome_outlined,
+                  title: 'App Feature Tour',
+                  description: 'Replay the interactive feature showcase and discover everything RankScope can do.',
+                  onTap: () => context.push('/onboarding?revisit=true'),
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
@@ -805,13 +819,15 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      Row(
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           ElevatedButton(
                             onPressed: _saveBingKey,
                             child: const Text('Save Bing Key'),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
                           OutlinedButton(
                             onPressed: _isTestingBingKey
                                 ? null
@@ -918,6 +934,159 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     ],
                   ),
                 ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // About & Developer Attribution
+                const Text(
+                  'ABOUT & DEVELOPER',
+                  style: AppTextStyles.labelSmall,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfacePrimary,
+                    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                    border: Border.all(color: AppColors.borderSubtle),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.track_changes,
+                              size: 20,
+                              color: AppColors.accent,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'RankScope',
+                                  style: AppTextStyles.titleMedium,
+                                ),
+                                Text(
+                                  'v1.0.4+5 • Local-First SEO Intelligence',
+                                  style: AppTextStyles.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                      const SizedBox(height: AppSpacing.md),
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.code,
+                            size: 16,
+                            color: AppColors.textSecondary,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Developer: ',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              '.com.npAryal',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: () {
+                          Clipboard.setData(
+                            const ClipboardData(
+                              text: 'https://bishalaryal.com.np',
+                            ),
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Author URL copied: bishalaryal.com.np',
+                              ),
+                              backgroundColor: AppColors.accent,
+                            ),
+                          );
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.link,
+                                size: 16,
+                                color: AppColors.accent,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'author url: ',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  'bishalaryal.com.np',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.accent,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Icon(
+                                Icons.copy,
+                                size: 14,
+                                color: AppColors.accent,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.explore_outlined, size: 16),
+                          label: const Text('Replay App Feature Tour'),
+                          onPressed: () =>
+                              context.push('/onboarding?revisit=true'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
               ],
             ),
     );

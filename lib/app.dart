@@ -4,8 +4,32 @@ import 'core/theme/app_theme.dart';
 import 'routing/app_router.dart';
 
 /// Root application widget for RankScope.
-class RankScopeApp extends StatelessWidget {
-  const RankScopeApp({super.key});
+class RankScopeApp extends StatefulWidget {
+  final String initialLocation;
+  final RouterConfig<Object>? routerConfig;
+
+  const RankScopeApp({
+    super.key,
+    this.initialLocation = '/dashboard',
+    this.routerConfig,
+  });
+
+  @override
+  State<RankScopeApp> createState() => _RankScopeAppState();
+}
+
+class _RankScopeAppState extends State<RankScopeApp> {
+  late final RouterConfig<Object> _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _router =
+        widget.routerConfig ??
+        (widget.initialLocation == '/dashboard'
+            ? appRouter
+            : createAppRouter(initialLocation: widget.initialLocation));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,7 +38,7 @@ class RankScopeApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       themeMode: ThemeMode.light, // Strictly light mode only
-      routerConfig: appRouter,
+      routerConfig: _router,
     );
   }
 }

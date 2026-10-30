@@ -46,7 +46,7 @@ class BingMetricModel extends BingMetric {
   }
 
   /// Parses row from Bing GetQueryStats JSON:
-  /// {"Query":"flutter seo","Clicks":12,"Impressions":240,"AvgClickPosition":4.2,"Date":"\/Date(1600000000000)\/"}
+  /// {"Query":"flutter seo","Clicks":12,"Impressions":240,"AvgImpressionPosition":42,"AvgClickPosition":42,"Date":"\/Date(1600000000000)\/"}
   factory BingMetricModel.fromBingJson(
     Map<String, dynamic> json,
     int websiteId,
@@ -55,7 +55,20 @@ class BingMetricModel extends BingMetric {
     final query = json['Query'] as String? ?? '';
     final clicks = json['Clicks'] as int? ?? 0;
     final impressions = json['Impressions'] as int? ?? 0;
-    final avgPos = (json['AvgClickPosition'] as num?)?.toDouble() ?? 0.0;
+
+    // Bing Webmaster API scales AvgClickPosition and AvgImpressionPosition by 10 (e.g., 42 = 4.2).
+    // If a query has impressions but zero clicks, AvgClickPosition returns -1 or 0.
+    final rawClickPos = (json['AvgClickPosition'] as num?)?.toDouble() ?? 0.0;
+    final rawImpPos =
+        (json['AvgImpressionPosition'] as num?)?.toDouble() ?? 0.0;
+
+    double avgPos = 0.0;
+    if (rawImpPos > 0) {
+      avgPos = rawImpPos >= 10.0 ? (rawImpPos / 10.0) : rawImpPos;
+    } else if (rawClickPos > 0) {
+      avgPos = rawClickPos >= 10.0 ? (rawClickPos / 10.0) : rawClickPos;
+    }
+
     final ctr = impressions > 0 ? (clicks / impressions) : 0.0;
 
     String dateStr = '';

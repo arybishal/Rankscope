@@ -9,6 +9,7 @@ import 'package:rankscope/core/theme/app_colors.dart';
 import 'package:rankscope/core/theme/app_text_styles.dart';
 import 'package:rankscope/core/theme/spacing.dart';
 import 'package:rankscope/features/backup_restore/data/services/backup_restore_service.dart';
+import 'package:rankscope/features/bing_webmaster/presentation/controllers/bing_controller.dart';
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -31,6 +32,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   final _bingKeyController = TextEditingController();
   final _gscClientController = TextEditingController();
   bool _isLoadingKeys = true;
+  bool _isTestingBingKey = false;
   DateTime? _lastBackupDate;
   int _logErrorCount = 0;
   int _totalLogCount = 0;
@@ -96,6 +98,41 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         const SnackBar(
           content: Text('Bing API credentials saved to Android KeyStore.'),
         ),
+      );
+    }
+  }
+
+  Future<void> _testBingConnection() async {
+    setState(() => _isTestingBingKey = true);
+    final key = _bingKeyController.text.trim();
+    if (key.isNotEmpty) {
+      final storage = ref.read(secureStorageServiceProvider);
+      await storage.saveBingApiKey(key);
+    }
+
+    final sites = await ref
+        .read(bingSyncNotifierProvider.notifier)
+        .testConnection();
+    if (!mounted) return;
+    setState(() => _isTestingBingKey = false);
+
+    if (sites != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            sites.isNotEmpty
+                ? 'Bing API connected! Found ${sites.length} verified site(s).'
+                : 'Bing API connected, but no verified sites found on this account.',
+          ),
+          backgroundColor: AppColors.rankGain,
+        ),
+      );
+    } else {
+      final error =
+          ref.read(bingSyncNotifierProvider).errorMessage ??
+          'Connection failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: AppColors.rankDrop),
       );
     }
   }
@@ -754,9 +791,29 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      ElevatedButton(
-                        onPressed: _saveBingKey,
-                        child: const Text('Save Bing Key'),
+                      Row(
+                        children: [
+                          ElevatedButton(
+                            onPressed: _saveBingKey,
+                            child: const Text('Save Bing Key'),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          OutlinedButton(
+                            onPressed: _isTestingBingKey
+                                ? null
+                                : _testBingConnection,
+                            child: _isTestingBingKey
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.accent,
+                                    ),
+                                  )
+                                : const Text('Test Connection'),
+                          ),
+                        ],
                       ),
                     ],
                   ),

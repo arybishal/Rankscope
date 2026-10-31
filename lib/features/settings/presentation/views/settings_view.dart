@@ -47,7 +47,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   bool _isLoadingKeys = true;
   bool _isTestingBingKey = false;
   bool _isTestingGscToken = false;
+  bool _isSigningInGoogle = false;
   bool _isTestingYandexToken = false;
+  bool _showAdvancedGsc = false;
+  String? _gscUserEmail;
   List<String> _gscVerifiedSites = [];
   DateTime? _lastBackupDate;
   int _logErrorCount = 0;
@@ -76,6 +79,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     final gscClient = await storage.getGscClientId();
     final gscAccess = await storage.getGscAccessToken();
     final gscRefresh = await storage.getGscRefreshToken();
+    final gscEmail = await storage.getGscUserEmail();
     final yandexToken = await storage.getYandexOAuthToken();
 
     if (mounted) {
@@ -84,6 +88,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         _gscClientController.text = gscClient ?? '';
         _gscAccessTokenController.text = gscAccess ?? '';
         _gscRefreshTokenController.text = gscRefresh ?? '';
+        _gscUserEmail = gscEmail;
         _yandexTokenController.text = yandexToken ?? '';
         _isLoadingKeys = false;
       });
@@ -196,6 +201,62 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         ),
       );
     }
+  }
+
+  Future<void> _connectWithGoogle() async {
+    setState(() => _isSigningInGoogle = true);
+    try {
+      final clientId = _gscClientController.text.trim();
+      final status = await ref
+          .read(gscConnectionStatusProvider.notifier)
+          .connectGoogle(clientId: clientId.isNotEmpty ? clientId : null);
+
+      await _loadStoredCredentials();
+
+      if (!mounted) return;
+      setState(() {
+        _isSigningInGoogle = false;
+        if (status.verifiedSites.isNotEmpty) {
+          _gscVerifiedSites = status.verifiedSites;
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            status.isConnected
+                ? 'Google account connected! Found ${status.verifiedSites.length} property(ies).'
+                : status.message,
+          ),
+          backgroundColor:
+              status.isConnected ? AppColors.rankGain : AppColors.rankDrop,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSigningInGoogle = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to connect Google account: $e'),
+          backgroundColor: AppColors.rankDrop,
+        ),
+      );
+    }
+  }
+
+  Future<void> _disconnectGoogle() async {
+    await ref.read(gscConnectionStatusProvider.notifier).disconnect();
+    await _loadStoredCredentials();
+    if (!mounted) return;
+    setState(() {
+      _gscVerifiedSites = [];
+      _gscAccessTokenController.clear();
+      _gscRefreshTokenController.clear();
+      _gscUserEmail = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Google account disconnected.')),
+    );
   }
 
   Future<void> _testGscConnection() async {
@@ -1155,176 +1216,478 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   style: AppTextStyles.labelSmall,
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                    border: Border.all(color: borderColor),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                Consumer(
+                  builder: (context, ref, _) {
+                    final gscStatus = ref.watch(gscConnectionStatusProvider).value ??
+                        GscConnectionStatus.notConfigured();
+
+                    Color statusBg;
+                    Color statusBorder;
+                    Color statusColor;
+
+                    switch (gscStatus.state) {
+                      case GscConnectionState.connected:
+                        statusBg = isDark ? const Color(0xFF052E16) : const Color(0xFFF0FDF4);
+                        statusBorder = isDark ? const Color(0xFF166534) : const Color(0xFFBBF7D0);
+                        statusColor = isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
+                        break;
+                      case GscConnectionState.readyToConnect:
+                        statusBg = isDark ? const Color(0xFF1E3A8A).withAlpha(40) : const Color(0xFFEFF6FF);
+                        statusBorder = isDark ? const Color(0xFF3B82F6) : const Color(0xFFBFDBFE);
+                        statusColor = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
+                        break;
+                      case GscConnectionState.connecting:
+                        statusBg = isDark ? AppColors.darkSurfaceSecondary : const Color(0xFFF1F5F9);
+                        statusBorder = isDark ? const Color(0xFF3B82F6) : AppColors.accent;
+                        statusColor = isDark ? const Color(0xFF60A5FA) : AppColors.accent;
+                        break;
+                      case GscConnectionState.actionRequired:
+                        statusBg = isDark ? const Color(0xFF451A03) : const Color(0xFFFFFBEB);
+                        statusBorder = isDark ? const Color(0xFFB45309) : const Color(0xFFFDE68A);
+                        statusColor = isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+                        break;
+                      case GscConnectionState.connectionError:
+                        statusBg = isDark ? const Color(0xFF450A0A) : const Color(0xFFFEF2F2);
+                        statusBorder = isDark ? const Color(0xFF991B1B) : const Color(0xFFFECACA);
+                        statusColor = isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+                        break;
+                      case GscConnectionState.notConfigured:
+                        statusBg = isDark ? AppColors.darkSurfaceSecondary : const Color(0xFFF1F5F9);
+                        statusBorder = isDark ? AppColors.darkBorderSubtle : const Color(0xFFCBD5E1);
+                        statusColor = isDark ? AppColors.darkTextTertiary : AppColors.textSecondary;
+                        break;
+                    }
+
+                    final activeEmail = _gscUserEmail ?? gscStatus.userEmail;
+                    final activeSites = _gscVerifiedSites.isNotEmpty
+                        ? _gscVerifiedSites
+                        : gscStatus.verifiedSites;
+
+                    return Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2563EB).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Icon(
-                              Icons.search,
-                              size: 16,
-                              color: Color(0xFF2563EB),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Google Search Console API',
-                            style: AppTextStyles.labelLarge,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Direct HTTPS connection to Google Search Console API v3. Stored securely in hardware-backed Android KeyStore with zero intermediate server.',
-                        style: AppTextStyles.bodySmall,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-
-                      const Text(
-                        'OAuth 2.0 Access Token',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      TextField(
-                        controller: _gscAccessTokenController,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          hintText: 'Paste OAuth access token (ya29...)...',
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.content_paste, size: 18),
-                            tooltip: 'Paste from clipboard',
-                            onPressed: () async {
-                              final data = await Clipboard.getData('text/plain');
-                              if (data?.text != null) {
-                                _gscAccessTokenController.text = data!.text!.trim();
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-
-                      const Text(
-                        'OAuth Client ID (Optional)',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      TextField(
-                        controller: _gscClientController,
-                        decoration: const InputDecoration(
-                          hintText: 'your-client-id.apps.googleusercontent.com',
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-
-                      const Text(
-                        'OAuth Refresh Token (Optional)',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      TextField(
-                        controller: _gscRefreshTokenController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
-                          hintText: '1//... (for automated background token renewal)',
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-
-                      if (_gscVerifiedSites.isNotEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.all(AppSpacing.sm),
-                          decoration: BoxDecoration(
-                            color: AppColors.rankGain.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                            border: Border.all(
-                              color: AppColors.rankGain.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          // Header + Status Pill
+                          Row(
                             children: [
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.verified,
-                                    size: 16,
-                                    color: AppColors.rankGain,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Connected Properties (${_gscVerifiedSites.length}):',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.rankGain,
-                                    ),
-                                  ),
-                                ],
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Icon(
+                                  Icons.travel_explore,
+                                  size: 18,
+                                  color: Color(0xFF2563EB),
+                                ),
                               ),
-                              const SizedBox(height: 4),
-                              Wrap(
-                                spacing: 4,
-                                runSpacing: 4,
-                                children: _gscVerifiedSites.map((site) {
-                                  return Chip(
-                                    label: Text(
-                                      site,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontFamily: 'monospace',
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Google Search Console API',
+                                  style: AppTextStyles.labelLarge,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: statusBg,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: statusBorder),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (gscStatus.isConnecting || _isSigningInGoogle) ...[
+                                      SizedBox(
+                                        width: 10,
+                                        height: 10,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 1.5,
+                                          color: statusColor,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ] else ...[
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: BoxDecoration(
+                                          color: statusColor,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Text(
+                                      gscStatus.label,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: statusColor,
                                       ),
                                     ),
-                                    visualDensity: VisualDensity.compact,
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  );
-                                }).toList(),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                      ],
+                          const SizedBox(height: 8),
 
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ElevatedButton(
-                            onPressed: _saveGscCredentials,
-                            child: const Text('Save Credentials'),
+                          // State Description Banner
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: statusBg,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: statusBorder),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  gscStatus.message,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                                  ),
+                                ),
+                                if (activeEmail != null && activeEmail.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.account_circle_outlined, size: 14, color: statusColor),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Authorized Account: $activeEmail',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: statusColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
-                          OutlinedButton(
-                            onPressed: _isTestingGscToken ? null : _testGscConnection,
-                            child: _isTestingGscToken
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: AppColors.accent,
+                          const SizedBox(height: AppSpacing.md),
+
+                          // Primary Action Buttons
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2563EB),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                ),
+                                onPressed: _isSigningInGoogle ? null : _connectWithGoogle,
+                                icon: _isSigningInGoogle
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      )
+                                    : const Icon(Icons.login, size: 16),
+                                label: Text(
+                                  gscStatus.isConnected
+                                      ? 'Switch Google Account'
+                                      : 'Connect with Google',
+                                ),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: (_isTestingGscToken || _isSigningInGoogle) ? null : _testGscConnection,
+                                icon: _isTestingGscToken
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                                      )
+                                    : const Icon(Icons.verified_outlined, size: 16),
+                                label: const Text('Verify API Connection'),
+                              ),
+                              if (gscStatus.isConnected || activeEmail != null)
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(foregroundColor: AppColors.rankDrop),
+                                  onPressed: _disconnectGoogle,
+                                  icon: const Icon(Icons.link_off, size: 16),
+                                  label: const Text('Disconnect'),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+
+                          // Verified Properties Chips
+                          if (activeSites.isNotEmpty) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(AppSpacing.sm),
+                              decoration: BoxDecoration(
+                                color: AppColors.rankGain.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                                border: Border.all(
+                                  color: AppColors.rankGain.withValues(alpha: 0.25),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.verified,
+                                        size: 16,
+                                        color: AppColors.rankGain,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Connected Properties (${activeSites.length}):',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.rankGain,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Wrap(
+                                    spacing: 4,
+                                    runSpacing: 4,
+                                    children: activeSites.map((site) {
+                                      return Chip(
+                                        label: Text(
+                                          site,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontFamily: 'monospace',
+                                          ),
+                                        ),
+                                        visualDensity: VisualDensity.compact,
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                          ],
+
+                          // Android OAuth Client Setup Details
+                          Container(
+                            padding: const EdgeInsets.all(AppSpacing.sm),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppColors.darkSurfaceSecondary : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline,
+                                      size: 14,
+                                      color: isDark ? const Color(0xFF60A5FA) : AppColors.accent,
                                     ),
-                                  )
-                                : const Text('Test Connection'),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        'Android OAuth Client Setup (Google Cloud Console)',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Register an Android OAuth Client in Google Cloud Console. Android clients are authenticated by Google Play Services without needing a Client Secret.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Text('Package Name: ', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const SelectableText('com.rankscope.app', style: TextStyle(fontSize: 10, fontFamily: 'monospace')),
+                                    const Spacer(),
+                                    IconButton(
+                                      icon: const Icon(Icons.copy, size: 14),
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'Copy package name',
+                                      onPressed: () {
+                                        Clipboard.setData(const ClipboardData(text: 'com.rankscope.app'));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Package name copied!')),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    const Text('SHA-1: ', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const Expanded(
+                                      child: SelectableText(
+                                        '1C:7F:AA:41:93:F2:F1:58:FD:48:FE:5D:60:44:9E:9D:0A:C9:4C:77',
+                                        style: TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.copy, size: 14),
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'Copy SHA-1 fingerprint',
+                                      onPressed: () {
+                                        Clipboard.setData(const ClipboardData(
+                                          text: '1C:7F:AA:41:93:F2:F1:58:FD:48:FE:5D:60:44:9E:9D:0A:C9:4C:77',
+                                        ));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('SHA-1 fingerprint copied!')),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
+                          const SizedBox(height: AppSpacing.sm),
+
+                          // Client ID input field
+                          const Text(
+                            'OAuth Client ID',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _gscClientController,
+                                  decoration: const InputDecoration(
+                                    hintText: 'your-client-id.apps.googleusercontent.com',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: () async {
+                                  final id = _gscClientController.text.trim();
+                                  final storage = ref.read(secureStorageServiceProvider);
+                                  if (id.isNotEmpty) {
+                                    await storage.saveGscClientId(id);
+                                    await ref.read(gscConnectionStatusProvider.notifier).refreshStatus();
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('OAuth Client ID saved to Android KeyStore.')),
+                                      );
+                                    }
+                                  } else {
+                                    await storage.clearGscCredentials();
+                                    await ref.read(gscConnectionStatusProvider.notifier).refreshStatus();
+                                  }
+                                },
+                                child: const Text('Save'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+
+                          // Expandable Advanced Manual Token Entry
+                          InkWell(
+                            onTap: () => setState(() => _showAdvancedGsc = !_showAdvancedGsc),
+                            borderRadius: BorderRadius.circular(4),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'Advanced / Manual Token Entry',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Icon(
+                                    _showAdvancedGsc ? Icons.expand_less : Icons.expand_more,
+                                    size: 18,
+                                    color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (_showAdvancedGsc) ...[
+                            const SizedBox(height: 6),
+                            const Text(
+                              'OAuth 2.0 Access Token (Manual Override)',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            TextField(
+                              controller: _gscAccessTokenController,
+                              obscureText: true,
+                              decoration: InputDecoration(
+                                hintText: 'Paste OAuth access token (ya29...)...',
+                                suffixIcon: IconButton(
+                                  icon: const Icon(Icons.content_paste, size: 18),
+                                  tooltip: 'Paste from clipboard',
+                                  onPressed: () async {
+                                    final data = await Clipboard.getData('text/plain');
+                                    if (data?.text != null) {
+                                      _gscAccessTokenController.text = data!.text!.trim();
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            const Text(
+                              'OAuth Refresh Token (Optional)',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            TextField(
+                              controller: _gscRefreshTokenController,
+                              obscureText: true,
+                              decoration: const InputDecoration(
+                                hintText: '1//... (for automated background token renewal)',
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            ElevatedButton(
+                              onPressed: _saveGscCredentials,
+                              child: const Text('Save Manual Tokens'),
+                            ),
+                          ],
                         ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.lg),
 

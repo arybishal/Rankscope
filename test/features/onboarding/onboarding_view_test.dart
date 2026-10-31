@@ -217,6 +217,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.drag(find.byType(ListView), const Offset(0, -800));
       await tester.pumpAndSettle();
+      await tester.drag(find.byType(ListView), const Offset(0, -800));
+      await tester.pumpAndSettle();
 
       expect(find.text('ABOUT & DEVELOPER'), findsOneWidget);
       expect(find.text('Developer: '), findsOneWidget);

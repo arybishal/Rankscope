@@ -11,6 +11,9 @@ import '../../domain/utils/gsc_property_matcher.dart';
 export '../../domain/entities/gsc_metric.dart';
 export '../../domain/repositories/gsc_repository.dart';
 export '../../domain/utils/gsc_property_matcher.dart';
+export '../../data/services/google_auth_service.dart';
+
+import '../../data/services/google_auth_service.dart';
 
 final remoteGscDatasourceProvider = Provider<RemoteGscDatasource>((ref) {
   return RemoteGscDatasource();
@@ -151,4 +154,73 @@ class GscSyncNotifier extends Notifier<GscSyncState> {
 final gscSyncNotifierProvider =
     NotifierProvider<GscSyncNotifier, GscSyncState>(() {
       return GscSyncNotifier();
+    });
+
+final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {
+  return GoogleAuthService(
+    remoteDatasource: ref.watch(remoteGscDatasourceProvider),
+  );
+});
+
+class GscConnectionStatusNotifier extends AsyncNotifier<GscConnectionStatus> {
+  @override
+  Future<GscConnectionStatus> build() async {
+    final authService = ref.watch(googleAuthServiceProvider);
+    return await authService.checkConnectionStatus(verifyWithApi: false);
+  }
+
+  Future<void> refreshStatus({bool verifyWithApi = false}) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final authService = ref.read(googleAuthServiceProvider);
+      return await authService.checkConnectionStatus(
+        verifyWithApi: verifyWithApi,
+      );
+    });
+  }
+
+  Future<GscConnectionStatus> connectGoogle({
+    String? clientId,
+    String? serverClientId,
+  }) async {
+    state = const AsyncValue.data(
+      GscConnectionStatus(
+        state: GscConnectionState.connecting,
+        label: 'Connecting...',
+        message: 'Authorizing with Google...',
+      ),
+    );
+    final authService = ref.read(googleAuthServiceProvider);
+    final newStatus = await authService.signInAndAuthorize(
+      clientId: clientId,
+      serverClientId: serverClientId,
+    );
+    state = AsyncValue.data(newStatus);
+    return newStatus;
+  }
+
+  Future<GscConnectionStatus> verifyConnection() async {
+    state = const AsyncValue.data(
+      GscConnectionStatus(
+        state: GscConnectionState.connecting,
+        label: 'Verifying...',
+        message: 'Testing connection to Google Search Console API...',
+      ),
+    );
+    final authService = ref.read(googleAuthServiceProvider);
+    final newStatus = await authService.verifySearchConsoleAccess();
+    state = AsyncValue.data(newStatus);
+    return newStatus;
+  }
+
+  Future<void> disconnect() async {
+    final authService = ref.read(googleAuthServiceProvider);
+    final newStatus = await authService.disconnect();
+    state = AsyncValue.data(newStatus);
+  }
+}
+
+final gscConnectionStatusProvider =
+    AsyncNotifierProvider<GscConnectionStatusNotifier, GscConnectionStatus>(() {
+      return GscConnectionStatusNotifier();
     });

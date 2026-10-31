@@ -17,6 +17,7 @@ import 'package:rankscope/features/keywords/presentation/controllers/keywords_co
 import 'package:rankscope/features/keywords/presentation/views/keyword_details_view.dart';
 import 'package:rankscope/features/reporting/data/generators/csv_report_generator.dart';
 import 'package:rankscope/features/reporting/data/generators/pdf_report_generator.dart';
+import 'package:rankscope/features/search_console/presentation/controllers/gsc_controller.dart';
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
 import 'package:rankscope/shared/widgets/cards/rank_metric_card.dart';
 import 'package:rankscope/shared/widgets/charts/trend_line_chart.dart';
@@ -28,8 +29,11 @@ import 'package:rankscope/shared/widgets/surfaces/glass_container.dart';
 import 'package:share_plus/share_plus.dart';
 
 final googleConfiguredProvider = FutureProvider<bool>((ref) async {
-  final service = SearchPerformanceSyncService();
-  return await service.isGoogleConfigured();
+  final status = ref.watch(gscConnectionStatusProvider);
+  return status.maybeWhen(
+    data: (s) => s.isConnected,
+    orElse: () => false,
+  );
 });
 
 final bingConfiguredProvider = FutureProvider<bool>((ref) async {
@@ -424,23 +428,37 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
             spacing: 8,
             runSpacing: 4,
             children: [
-              _buildConnectionStatusChip(
-                isDark: isDark,
-                engine: 'Google Search Console',
-                isConnected: googleConfigured,
-                icon: Icons.search,
+              _buildGscStatusChip(
+                context,
+                ref,
+                isDark,
+                (googleConfigured &&
+                        !(ref.watch(gscConnectionStatusProvider).value?.isConnected ?? false))
+                    ? GscConnectionStatus.connected(
+                        message: 'Connected with Google Search Console API.',
+                      )
+                    : (ref.watch(gscConnectionStatusProvider).value ??
+                        GscConnectionStatus.notConfigured()),
               ),
-              _buildConnectionStatusChip(
-                isDark: isDark,
-                engine: 'Bing Webmaster',
-                isConnected: bingConfigured,
-                icon: Icons.travel_explore,
+              InkWell(
+                onTap: () => context.push('/search-engines'),
+                borderRadius: BorderRadius.circular(4),
+                child: _buildConnectionStatusChip(
+                  isDark: isDark,
+                  engine: 'Bing Webmaster',
+                  isConnected: bingConfigured,
+                  icon: Icons.travel_explore,
+                ),
               ),
-              _buildConnectionStatusChip(
-                isDark: isDark,
-                engine: 'Yandex Webmaster',
-                isConnected: yandexConfigured,
-                icon: Icons.travel_explore_outlined,
+              InkWell(
+                onTap: () => context.push('/search-engines'),
+                borderRadius: BorderRadius.circular(4),
+                child: _buildConnectionStatusChip(
+                  isDark: isDark,
+                  engine: 'Yandex Webmaster',
+                  isConnected: yandexConfigured,
+                  icon: Icons.travel_explore_outlined,
+                ),
               ),
             ],
           ),
@@ -453,6 +471,250 @@ class _DashboardContentState extends ConsumerState<_DashboardContent> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildGscStatusChip(
+    BuildContext context,
+    WidgetRef ref,
+    bool isDark,
+    GscConnectionStatus status,
+  ) {
+    Color bg;
+    Color border;
+    Color color;
+    IconData icon;
+    String text;
+    bool showSpinner = false;
+
+    switch (status.state) {
+      case GscConnectionState.connected:
+        bg = isDark ? const Color(0xFF052E16) : const Color(0xFFF0FDF4);
+        border = isDark ? const Color(0xFF166534) : const Color(0xFFBBF7D0);
+        color = isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
+        icon = Icons.check_circle_outline;
+        text = 'Google Search Console: Connected';
+        break;
+      case GscConnectionState.readyToConnect:
+        bg = isDark
+            ? const Color(0xFF1E3A8A).withAlpha(50)
+            : const Color(0xFFEFF6FF);
+        border = isDark ? const Color(0xFF3B82F6) : const Color(0xFFBFDBFE);
+        color = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
+        icon = Icons.link;
+        text = 'Google Search Console: Ready to Connect';
+        break;
+      case GscConnectionState.connecting:
+        bg = isDark ? AppColors.darkSurfaceSecondary : const Color(0xFFF1F5F9);
+        border = isDark ? const Color(0xFF3B82F6) : AppColors.accent;
+        color = isDark ? const Color(0xFF60A5FA) : AppColors.accent;
+        icon = Icons.sync;
+        text = 'Google Search Console: Connecting...';
+        showSpinner = true;
+        break;
+      case GscConnectionState.actionRequired:
+        bg = isDark ? const Color(0xFF451A03) : const Color(0xFFFFFBEB);
+        border = isDark ? const Color(0xFFB45309) : const Color(0xFFFDE68A);
+        color = isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+        icon = Icons.warning_amber_rounded;
+        text = 'Google Search Console: Action Required';
+        break;
+      case GscConnectionState.connectionError:
+        bg = isDark ? const Color(0xFF450A0A) : const Color(0xFFFEF2F2);
+        border = isDark ? const Color(0xFF991B1B) : const Color(0xFFFECACA);
+        color = isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+        icon = Icons.error_outline;
+        text = 'Google Search Console: Connection Error';
+        break;
+      case GscConnectionState.notConfigured:
+        bg = isDark ? AppColors.darkSurfaceSecondary : const Color(0xFFF1F5F9);
+        border = isDark ? AppColors.darkBorderSubtle : const Color(0xFFCBD5E1);
+        color = isDark ? AppColors.darkTextTertiary : AppColors.textSecondary;
+        icon = Icons.search;
+        text = 'Google Search Console: Not Configured';
+        break;
+    }
+
+    return InkWell(
+      onTap: () => _handleGscChipTap(context, ref, status),
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showSpinner)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: SizedBox(
+                  width: 11,
+                  height: 11,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: color,
+                  ),
+                ),
+              )
+            else ...[
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              text,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _handleGscChipTap(
+    BuildContext context,
+    WidgetRef ref,
+    GscConnectionStatus status,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.travel_explore, color: AppColors.engineGoogle),
+              SizedBox(width: 8),
+              Text(
+                'Google Search Console',
+                style: AppTextStyles.titleMedium,
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Status: ${status.label}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(status.message, style: AppTextStyles.bodySmall),
+              if (status.userEmail != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Account: ${status.userEmail}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+              if (status.verifiedSites.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Verified Properties (${status.verifiedSites.length}):',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ...status.verifiedSites
+                    .take(5)
+                    .map(
+                      (s) => Text(
+                        '• $s',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                if (status.verifiedSites.length > 5)
+                  Text(
+                    '+${status.verifiedSites.length - 5} more...',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+            if (status.isReadyToConnect || status.isActionRequired)
+              ElevatedButton.icon(
+                icon: const Icon(Icons.login, size: 16),
+                label: const Text('Connect with Google'),
+                onPressed: () async {
+                  Navigator.of(dialogContext).pop();
+                  final newStatus = await ref
+                      .read(gscConnectionStatusProvider.notifier)
+                      .connectGoogle();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          newStatus.isConnected
+                              ? 'Google Search Console connected successfully!'
+                              : newStatus.message,
+                        ),
+                        backgroundColor:
+                            newStatus.isConnected
+                                ? AppColors.rankGain
+                                : AppColors.rankDrop,
+                      ),
+                    );
+                  }
+                },
+              ),
+            if (status.isConnected)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Verify Connection'),
+                onPressed: () async {
+                  Navigator.of(dialogContext).pop();
+                  final newStatus = await ref
+                      .read(gscConnectionStatusProvider.notifier)
+                      .verifyConnection();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(newStatus.message),
+                        backgroundColor:
+                            newStatus.isConnected
+                                ? AppColors.rankGain
+                                : AppColors.rankDrop,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                context.push('/search-engines');
+              },
+              child: const Text('Search Engines Hub'),
+            ),
+          ],
+        );
+      },
     );
   }
 

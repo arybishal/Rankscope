@@ -15,6 +15,9 @@ class SecureStorageService {
   static const String _keyGscAccessToken = 'gsc_access_token';
   static const String _keyGscTokenExpiry = 'gsc_token_expiry';
   static const String _keyGscClientId = 'gsc_client_id';
+  static const String _keyGscUserEmail = 'gsc_user_email';
+  static const String _keyGscUserDisplayName = 'gsc_user_display_name';
+  static const String _keyGscLastVerified = 'gsc_last_verified';
   static const String _keyBingApiKey = 'bing_api_key';
   static const String _keyYandexOAuthToken = 'yandex_oauth_token';
   static const String _keyYandexClientId = 'yandex_client_id';
@@ -111,10 +114,38 @@ class SecureStorageService {
     return await _safeRead(_keyGscClientId);
   }
 
+  Future<void> saveGscUserEmail(String email) async {
+    await _safeWrite(_keyGscUserEmail, email.trim());
+  }
+
+  Future<String?> getGscUserEmail() async {
+    return await _safeRead(_keyGscUserEmail);
+  }
+
+  Future<void> saveGscUserDisplayName(String name) async {
+    await _safeWrite(_keyGscUserDisplayName, name.trim());
+  }
+
+  Future<String?> getGscUserDisplayName() async {
+    return await _safeRead(_keyGscUserDisplayName);
+  }
+
+  Future<void> saveGscLastVerified(int epochMs) async {
+    await _safeWrite(_keyGscLastVerified, epochMs.toString());
+  }
+
+  Future<int?> getGscLastVerified() async {
+    final str = await _safeRead(_keyGscLastVerified);
+    return str != null ? int.tryParse(str) : null;
+  }
+
   Future<void> clearGscCredentials() async {
     await _safeDelete(_keyGscRefreshToken);
     await _safeDelete(_keyGscAccessToken);
     await _safeDelete(_keyGscTokenExpiry);
+    await _safeDelete(_keyGscUserEmail);
+    await _safeDelete(_keyGscUserDisplayName);
+    await _safeDelete(_keyGscLastVerified);
   }
 
   // --- Bing Webmaster Tools Credentials ---
@@ -166,6 +197,12 @@ class SecureStorageService {
     if (gscExpiry != null) creds[_keyGscTokenExpiry] = gscExpiry;
     final gscClient = await getGscClientId();
     if (gscClient != null) creds[_keyGscClientId] = gscClient;
+    final gscEmail = await getGscUserEmail();
+    if (gscEmail != null) creds[_keyGscUserEmail] = gscEmail;
+    final gscName = await getGscUserDisplayName();
+    if (gscName != null) creds[_keyGscUserDisplayName] = gscName;
+    final gscVerified = await _safeRead(_keyGscLastVerified);
+    if (gscVerified != null) creds[_keyGscLastVerified] = gscVerified;
     final bingKey = await getBingApiKey();
     if (bingKey != null) creds[_keyBingApiKey] = bingKey;
     final yandexToken = await getYandexOAuthToken();

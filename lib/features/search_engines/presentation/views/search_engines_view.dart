@@ -13,6 +13,7 @@ import '../../../../shared/widgets/surfaces/glass_container.dart';
 import '../../../dashboard/presentation/views/dashboard_view.dart'
     hide yandexConfiguredProvider;
 import '../../../keywords/presentation/controllers/keywords_controller.dart';
+import '../../../search_console/presentation/controllers/gsc_controller.dart';
 import '../../../websites/presentation/controllers/websites_controller.dart';
 import '../../../yandex_webmaster/presentation/controllers/yandex_controller.dart';
 
@@ -176,13 +177,17 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final googleConfigured = ref.watch(googleConfiguredProvider).value ?? false;
+    final gscStatus = ref.watch(gscConnectionStatusProvider).value ??
+        GscConnectionStatus.notConfigured();
     final bingConfigured = ref.watch(bingConfiguredProvider).value ?? false;
     final yandexConfigured = ref.watch(yandexConfiguredProvider).value ?? false;
 
     return RefreshIndicator(
       color: AppColors.accent,
       onRefresh: () async {
+        await ref
+            .read(gscConnectionStatusProvider.notifier)
+            .refreshStatus(verifyWithApi: true);
         ref.invalidate(googleConfiguredProvider);
         ref.invalidate(bingConfiguredProvider);
         ref.invalidate(yandexConfiguredProvider);
@@ -199,7 +204,7 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
           const SizedBox(height: AppSpacing.md),
 
           // 3. Google Search Console Card
-          _buildGoogleCard(context, isDark, googleConfigured),
+          _buildGoogleCard(context, isDark, gscStatus),
           const SizedBox(height: AppSpacing.md),
 
           // 4. Bing Webmaster Tools Card
@@ -328,8 +333,42 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
     );
   }
 
-  Widget _buildGoogleCard(BuildContext context, bool isDark, bool isConfigured) {
+  Widget _buildGoogleCard(
+    BuildContext context,
+    bool isDark,
+    GscConnectionStatus status,
+  ) {
     final isExpanded = _expandedTutorialIndex == 0;
+    Color statusColor;
+    Color statusBg;
+
+    switch (status.state) {
+      case GscConnectionState.connected:
+        statusColor = AppColors.rankGain;
+        statusBg = isDark ? AppColors.darkRankGainLight : AppColors.rankGainLight;
+        break;
+      case GscConnectionState.readyToConnect:
+        statusColor = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
+        statusBg = isDark ? const Color(0xFF1E3A8A).withAlpha(40) : const Color(0xFFEFF6FF);
+        break;
+      case GscConnectionState.connecting:
+        statusColor = isDark ? const Color(0xFF60A5FA) : AppColors.accent;
+        statusBg = isDark ? AppColors.darkSurfaceSecondary : const Color(0xFFF1F5F9);
+        break;
+      case GscConnectionState.actionRequired:
+        statusColor = isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+        statusBg = isDark ? const Color(0xFF451A03) : const Color(0xFFFFFBEB);
+        break;
+      case GscConnectionState.connectionError:
+        statusColor = isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+        statusBg = isDark ? const Color(0xFF450A0A) : const Color(0xFFFEF2F2);
+        break;
+      case GscConnectionState.notConfigured:
+        statusColor = isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
+        statusBg = isDark ? AppColors.darkSurfaceSecondary : AppColors.surfaceSecondary;
+        break;
+    }
+
     return _engineCardWithTutorial(
       context,
       isDark,
@@ -337,11 +376,35 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
       engineName: 'Google Search Console',
       brandColor: AppColors.engineGoogle,
       icon: Icons.travel_explore,
-      isConfigured: isConfigured,
+      isConfigured: status.isConnected,
       mappedResource: widget.website.gscPropertyId ?? 'Auto-detecting from domain',
-      statusLabel: isConfigured ? 'Connected & Verified' : 'OAuth Setup Required',
-      description: 'Ingests daily search queries, impressions, clicks, CTR, and average position.',
+      statusLabel: status.label,
+      statusCustomColor: statusColor,
+      statusCustomBg: statusBg,
+      extraInfo: status.userEmail != null ? 'Account: ${status.userEmail}' : null,
+      description: status.message,
       onConfigure: () => context.push('/search-console'),
+      onConnectGoogle: !status.isConnected
+          ? () async {
+              final newStatus = await ref
+                  .read(gscConnectionStatusProvider.notifier)
+                  .connectGoogle();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      newStatus.isConnected
+                          ? 'Google Search Console connected successfully!'
+                          : newStatus.message,
+                    ),
+                    backgroundColor: newStatus.isConnected
+                        ? AppColors.rankGain
+                        : AppColors.rankDrop,
+                  ),
+                );
+              }
+            }
+          : null,
       isTutorialExpanded: isExpanded,
       onToggleTutorial: () {
         setState(() {
@@ -415,7 +478,22 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
     required bool isTutorialExpanded,
     required VoidCallback onToggleTutorial,
     required Widget tutorialContent,
+    Color? statusCustomColor,
+    Color? statusCustomBg,
+    String? extraInfo,
+    VoidCallback? onConnectGoogle,
   }) {
+    final pillBg = statusCustomBg ??
+        (isConfigured
+            ? (isDark ? AppColors.darkRankGainLight : AppColors.rankGainLight)
+            : (isDark ? AppColors.darkSurfaceSecondary : AppColors.surfaceSecondary));
+    final pillColor = statusCustomColor ??
+        (isConfigured
+            ? AppColors.rankGain
+            : (isDark ? AppColors.darkTextSecondary : AppColors.textSecondary));
+    final pillBorder = statusCustomColor ??
+        (isConfigured ? AppColors.rankGain : AppColors.borderSubtle);
+
     return GlassContainer(
       borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       child: Column(
@@ -450,13 +528,9 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: isConfigured
-                            ? (isDark ? AppColors.darkRankGainLight : AppColors.rankGainLight)
-                            : (isDark ? AppColors.darkSurfaceSecondary : AppColors.surfaceSecondary),
+                        color: pillBg,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isConfigured ? AppColors.rankGain : AppColors.borderSubtle,
-                        ),
+                        border: Border.all(color: pillBorder),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -465,7 +539,7 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
                             width: 6,
                             height: 6,
                             decoration: BoxDecoration(
-                              color: isConfigured ? AppColors.rankGain : AppColors.textTertiary,
+                              color: pillColor,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -475,9 +549,7 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: isConfigured
-                                  ? AppColors.rankGain
-                                  : (isDark ? AppColors.darkTextSecondary : AppColors.textSecondary),
+                              color: pillColor,
                             ),
                           ),
                         ],
@@ -495,6 +567,23 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
                     color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                   ),
                 ),
+                if (extraInfo != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.account_circle_outlined, size: 13, color: pillColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        extraInfo,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: pillColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 8),
 
                 // Mapped Property
@@ -528,8 +617,11 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
                 const SizedBox(height: 12),
 
                 // Action Row: Setup Tutorial Button + Configure Button
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     TextButton.icon(
                       style: TextButton.styleFrom(
@@ -551,17 +643,35 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
                       ),
                       onPressed: onToggleTutorial,
                     ),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
-                        side: BorderSide(
-                          color: isDark ? AppColors.darkBorderMedium : AppColors.borderMedium,
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (onConnectGoogle != null)
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: brandColor,
+                              foregroundColor: Colors.white,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            ),
+                            icon: const Icon(Icons.login, size: 14),
+                            label: const Text('Connect with Google', style: TextStyle(fontSize: 12)),
+                            onPressed: onConnectGoogle,
+                          ),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                            side: BorderSide(
+                              color: isDark ? AppColors.darkBorderMedium : AppColors.borderMedium,
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: const Icon(Icons.tune, size: 14),
+                          label: Text(isConfigured ? 'View Data' : 'Settings'),
+                          onPressed: onConfigure,
                         ),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      icon: const Icon(Icons.tune, size: 14),
-                      label: Text(isConfigured ? 'View Data' : 'Connect Account'),
-                      onPressed: onConfigure,
+                      ],
                     ),
                   ],
                 ),
@@ -604,12 +714,62 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
         ),
         const SizedBox(height: 8),
         Text(
-          '1. Open Google Cloud Console and select or create a project.\n'
-          '2. In API Library, enable the Google Search Console API.\n'
-          '3. Navigate to Credentials → Create Credentials → OAuth Client ID (Application type: Android/Desktop/Web).\n'
-          '4. Paste the Client ID into RankScope Settings. Zero client secrets are required.\n'
-          '5. Authorization uses standard OAuth 2.0 PKCE directly from your Android device.',
+          '1. In Google Cloud Console, open API Library and enable the "Google Search Console API".\n'
+          '2. Go to Credentials → Create Credentials → OAuth Client ID.\n'
+          '3. Select Application type: Android.\n'
+          '4. Enter the Package Name and SHA-1 fingerprint shown below.\n'
+          '5. Android OAuth clients are authenticated directly by Google Play Services without needing a Client Secret.\n'
+          '6. Tap "Connect with Google" to authorize Search Console on your device.',
           style: TextStyle(fontSize: 12, height: 1.5, color: bodyColor),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurfaceSecondary : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('Package Name: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SelectableText('com.rankscope.app', style: TextStyle(fontSize: 11, fontFamily: 'monospace')),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.copy, size: 14),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Copy package name',
+                    onPressed: () => _copyToClipboard('com.rankscope.app', 'Package name'),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  const Text('SHA-1: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  const Expanded(
+                    child: SelectableText(
+                      '1C:7F:AA:41:93:F2:F1:58:FD:48:FE:5D:60:44:9E:9D:0A:C9:4C:77',
+                      style: TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy, size: 14),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Copy SHA-1 fingerprint',
+                    onPressed: () => _copyToClipboard(
+                      '1C:7F:AA:41:93:F2:F1:58:FD:48:FE:5D:60:44:9E:9D:0A:C9:4C:77',
+                      'SHA-1 fingerprint',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         Container(

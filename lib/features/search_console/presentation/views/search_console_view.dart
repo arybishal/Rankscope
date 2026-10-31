@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:rankscope/core/theme/app_colors.dart';
 import 'package:rankscope/core/theme/app_text_styles.dart';
 import 'package:rankscope/core/theme/spacing.dart';
@@ -103,6 +104,8 @@ class SearchConsoleView extends ConsumerWidget {
     bool isDark,
     dynamic activeWebsite,
   ) {
+    final gscStatus = ref.watch(gscConnectionStatusProvider).value ??
+        GscConnectionStatus.notConfigured();
     final metricsAsync = ref.watch(
       gscMetricsFutureProvider(activeWebsite.id!),
     );
@@ -113,6 +116,9 @@ class SearchConsoleView extends ConsumerWidget {
     return RefreshIndicator(
       onRefresh: () async {
         await ref
+            .read(gscConnectionStatusProvider.notifier)
+            .refreshStatus(verifyWithApi: true);
+        await ref
             .read(searchPerformanceSyncProvider.notifier)
             .syncPerformance(
               websiteId: activeWebsite.id!,
@@ -120,33 +126,147 @@ class SearchConsoleView extends ConsumerWidget {
             );
       },
       child: ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            children: [
-              // Disambiguation Alert Box
-              GlassContainer(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 20,
-                      color: isDark ? const Color(0xFF60A5FA) : AppColors.accent,
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        'Google Search Console average position is a statistical aggregate computed over impressions across search queries, devices, and dates. It is distinct from discrete point-in-time SERP rankings.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        children: [
+          // Connection Status Notification Banner if not connected
+          if (!gscStatus.isConnected) ...[
+            GlassContainer(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.travel_explore,
+                        size: 20,
+                        color: AppColors.engineGoogle,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Google Search Console: ${gscStatus.label}',
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: isDark
+                              ? AppColors.darkTextPrimary
+                              : AppColors.textPrimary,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    gscStatus.message,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.textSecondary,
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                        ),
+                        icon: const Icon(Icons.login, size: 16),
+                        label: const Text('Connect with Google'),
+                        onPressed: () async {
+                          final res = await ref
+                              .read(gscConnectionStatusProvider.notifier)
+                              .connectGoogle();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  res.isConnected
+                                      ? 'Connected to Google Search Console!'
+                                      : res.message,
+                                ),
+                                backgroundColor: res.isConnected
+                                    ? AppColors.rankGain
+                                    : AppColors.rankDrop,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      OutlinedButton(
+                        onPressed: () => context.push('/settings'),
+                        child: const Text('Open Settings'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.darkRankGainLight
+                    : AppColors.rankGainLight,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: AppColors.rankGain.withAlpha(80),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle,
+                    size: 14,
+                    color: AppColors.rankGain,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Connected: ${gscStatus.userEmail ?? "Google Search Console API"}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.rankGain,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+
+          // Disambiguation Alert Box
+          GlassContainer(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 20,
+                  color: isDark ? const Color(0xFF60A5FA) : AppColors.accent,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'Google Search Console average position is a statistical aggregate computed over impressions across search queries, devices, and dates. It is distinct from discrete point-in-time SERP rankings.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
 
               // KPI Aggregates
               aggregatesAsync.when(
@@ -242,12 +362,52 @@ class SearchConsoleView extends ConsumerWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Connect your Google Search Console account via Settings to pull verified organic search queries directly to your device.',
+                            'Connect your Google Search Console account to pull verified organic search queries directly to your device.',
                             textAlign: TextAlign.center,
                             style: AppTextStyles.bodySmall.copyWith(
                               color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                             ),
                           ),
+                          const SizedBox(height: 12),
+                          if (!gscStatus.isConnected)
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2563EB),
+                                foregroundColor: Colors.white,
+                              ),
+                              icon: const Icon(Icons.login, size: 16),
+                              label: const Text('Connect with Google'),
+                              onPressed: () async {
+                                final res = await ref
+                                    .read(gscConnectionStatusProvider.notifier)
+                                    .connectGoogle();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        res.isConnected
+                                            ? 'Connected to Google Search Console!'
+                                            : res.message,
+                                      ),
+                                      backgroundColor: res.isConnected
+                                          ? AppColors.rankGain
+                                          : AppColors.rankDrop,
+                                    ),
+                                  );
+                                }
+                              },
+                            )
+                          else
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.sync, size: 16),
+                              label: const Text('Sync Search Console Data'),
+                              onPressed: () => ref
+                                  .read(searchPerformanceSyncProvider.notifier)
+                                  .syncPerformance(
+                                    websiteId: activeWebsite.id!,
+                                    domain: activeWebsite.domain,
+                                  ),
+                            ),
                         ],
                       ),
                     );

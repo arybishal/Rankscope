@@ -93,9 +93,10 @@ class _WebsitesManagementViewState
   Widget build(BuildContext context) {
     final websitesState = ref.watch(websitesProvider);
     final selectedSiteId = ref.watch(selectedWebsiteIdProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppColors.surfacePrimary,
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
       appBar: AppBar(
         title: const Text('Websites', style: AppTextStyles.titleLarge),
         actions: [
@@ -108,7 +109,7 @@ class _WebsitesManagementViewState
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.accent,
-        foregroundColor: AppColors.surfacePrimary,
+        foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text('Add Website'),
         onPressed: () => _openAddWebsiteDialog(context),
@@ -230,14 +231,14 @@ class _WebsitesManagementViewState
                     return Container(
                       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                       decoration: BoxDecoration(
-                        color: AppColors.surfacePrimary,
+                        color: isDark ? AppColors.darkCard : AppColors.surfacePrimary,
                         borderRadius: BorderRadius.circular(
                           AppSpacing.cardRadius,
                         ),
                         border: Border.all(
                           color: isActive
                               ? AppColors.accent
-                              : AppColors.borderSubtle,
+                              : (isDark ? AppColors.darkBorder : AppColors.borderSubtle),
                           width: isActive ? 1.5 : 1.0,
                         ),
                       ),
@@ -374,7 +375,53 @@ class _WebsitesManagementViewState
                               const SizedBox(height: AppSpacing.xs),
                               Padding(
                                 padding: const EdgeInsets.only(left: 28),
-                                child: _BingStatusBadge(domain: website.domain),
+                                child: Wrap(
+                                  spacing: AppSpacing.sm,
+                                  runSpacing: 4,
+                                  children: [
+                                    if (website.gscPropertyId != null)
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.verified,
+                                            size: 13,
+                                            color: AppColors.googleBlue,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'GSC: ${website.gscPropertyId}',
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              color: AppColors.googleBlue,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    _BingStatusBadge(domain: website.domain),
+                                    if (website.yandexHostId != null)
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.verified,
+                                            size: 13,
+                                            color: AppColors.yandexRed,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Yandex: ${website.yandexHostId}',
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              color: AppColors.yandexRed,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),

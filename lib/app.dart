@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_controller.dart';
 import 'routing/app_router.dart';
 
 /// Root application widget for RankScope.
-class RankScopeApp extends StatefulWidget {
+class RankScopeApp extends ConsumerStatefulWidget {
   final String initialLocation;
   final RouterConfig<Object>? routerConfig;
 
@@ -15,10 +17,10 @@ class RankScopeApp extends StatefulWidget {
   });
 
   @override
-  State<RankScopeApp> createState() => _RankScopeAppState();
+  ConsumerState<RankScopeApp> createState() => _RankScopeAppState();
 }
 
-class _RankScopeAppState extends State<RankScopeApp> {
+class _RankScopeAppState extends ConsumerState<RankScopeApp> {
   late final RouterConfig<Object> _router;
 
   @override
@@ -33,11 +35,14 @@ class _RankScopeAppState extends State<RankScopeApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeModeProvider);
+
     return MaterialApp.router(
       title: 'RankScope',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      themeMode: ThemeMode.light, // Strictly light mode only
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeMode,
       routerConfig: _router,
     );
   }

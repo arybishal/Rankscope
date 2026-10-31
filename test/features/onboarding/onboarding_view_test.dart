@@ -213,14 +213,16 @@ void main() {
       await tester.pumpAndSettle();
 
       // Scroll to bottom
-      await tester.drag(find.byType(ListView), const Offset(0, -1000));
+      await tester.drag(find.byType(ListView), const Offset(0, -800));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(ListView), const Offset(0, -800));
       await tester.pumpAndSettle();
 
       expect(find.text('ABOUT & DEVELOPER'), findsOneWidget);
       expect(find.text('Developer: '), findsOneWidget);
-      expect(find.text('.com.npAryal'), findsOneWidget);
-      expect(find.text('author url: '), findsOneWidget);
-      expect(find.text('bishalaryal.com.np'), findsOneWidget);
+      expect(find.text('Bishal Aryal'), findsOneWidget);
+      expect(find.text('Author Website: '), findsOneWidget);
+      expect(find.text('https://bishalaryal.com.np'), findsOneWidget);
       expect(find.text('Replay App Feature Tour'), findsOneWidget);
     });
   });

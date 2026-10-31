@@ -8,7 +8,7 @@ class SecureStorageService {
     : _storage =
           storage ??
           const FlutterSecureStorage(
-            aOptions: AndroidOptions(resetOnError: true),
+            aOptions: AndroidOptions(resetOnError: false),
           );
 
   static const String _keyGscRefreshToken = 'gsc_refresh_token';
@@ -16,46 +16,77 @@ class SecureStorageService {
   static const String _keyGscTokenExpiry = 'gsc_token_expiry';
   static const String _keyGscClientId = 'gsc_client_id';
   static const String _keyBingApiKey = 'bing_api_key';
+  static const String _keyYandexOAuthToken = 'yandex_oauth_token';
+  static const String _keyYandexClientId = 'yandex_client_id';
   static const String _keyHasCompletedOnboarding = 'has_completed_onboarding';
+  static const String _keyThemeMode = 'app_theme_mode';
+
+  // --- Safe Read & Write Helpers ---
+
+  Future<void> _safeWrite(String key, String value) async {
+    try {
+      await _storage.write(key: key, value: value);
+    } catch (_) {
+      // Fallback or handle storage error safely
+    }
+  }
+
+  Future<String?> _safeRead(String key) async {
+    try {
+      return await _storage.read(key: key);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _safeDelete(String key) async {
+    try {
+      await _storage.delete(key: key);
+    } catch (_) {}
+  }
 
   // --- Onboarding Status ---
 
   Future<void> setCompletedOnboarding(bool completed) async {
-    await _storage.write(
-      key: _keyHasCompletedOnboarding,
-      value: completed ? 'true' : 'false',
-    );
+    await _safeWrite(_keyHasCompletedOnboarding, completed ? 'true' : 'false');
   }
 
   Future<bool> hasCompletedOnboarding() async {
-    final val = await _storage.read(key: _keyHasCompletedOnboarding);
+    final val = await _safeRead(_keyHasCompletedOnboarding);
     return val == 'true';
+  }
+
+  // --- Theme Mode Persistence ---
+
+  Future<void> saveThemeMode(String mode) async {
+    await _safeWrite(_keyThemeMode, mode);
+  }
+
+  Future<String?> getThemeMode() async {
+    return await _safeRead(_keyThemeMode);
   }
 
   // --- Google Search Console Credentials ---
 
   Future<void> saveGscRefreshToken(String token) async {
-    await _storage.write(key: _keyGscRefreshToken, value: token);
+    await _safeWrite(_keyGscRefreshToken, token);
   }
 
   Future<String?> getGscRefreshToken() async {
-    return await _storage.read(key: _keyGscRefreshToken);
+    return await _safeRead(_keyGscRefreshToken);
   }
 
   Future<void> saveGscAccessToken(String token, int expiryEpochMs) async {
-    await _storage.write(key: _keyGscAccessToken, value: token);
-    await _storage.write(
-      key: _keyGscTokenExpiry,
-      value: expiryEpochMs.toString(),
-    );
+    await _safeWrite(_keyGscAccessToken, token);
+    await _safeWrite(_keyGscTokenExpiry, expiryEpochMs.toString());
   }
 
   Future<String?> getGscAccessToken() async {
-    return await _storage.read(key: _keyGscAccessToken);
+    return await _safeRead(_keyGscAccessToken);
   }
 
   Future<bool> isGscAccessTokenExpired() async {
-    final expiryStr = await _storage.read(key: _keyGscTokenExpiry);
+    final expiryStr = await _safeRead(_keyGscTokenExpiry);
     if (expiryStr == null) return true;
     final expiry = int.tryParse(expiryStr) ?? 0;
     // Buffer with 60 seconds
@@ -63,31 +94,54 @@ class SecureStorageService {
   }
 
   Future<void> saveGscClientId(String clientId) async {
-    await _storage.write(key: _keyGscClientId, value: clientId);
+    await _safeWrite(_keyGscClientId, clientId);
   }
 
   Future<String?> getGscClientId() async {
-    return await _storage.read(key: _keyGscClientId);
+    return await _safeRead(_keyGscClientId);
   }
 
   Future<void> clearGscCredentials() async {
-    await _storage.delete(key: _keyGscRefreshToken);
-    await _storage.delete(key: _keyGscAccessToken);
-    await _storage.delete(key: _keyGscTokenExpiry);
+    await _safeDelete(_keyGscRefreshToken);
+    await _safeDelete(_keyGscAccessToken);
+    await _safeDelete(_keyGscTokenExpiry);
   }
 
   // --- Bing Webmaster Tools Credentials ---
 
   Future<void> saveBingApiKey(String apiKey) async {
-    await _storage.write(key: _keyBingApiKey, value: apiKey);
+    await _safeWrite(_keyBingApiKey, apiKey);
   }
 
   Future<String?> getBingApiKey() async {
-    return await _storage.read(key: _keyBingApiKey);
+    return await _safeRead(_keyBingApiKey);
   }
 
   Future<void> clearBingCredentials() async {
-    await _storage.delete(key: _keyBingApiKey);
+    await _safeDelete(_keyBingApiKey);
+  }
+
+  // --- Yandex Webmaster Credentials ---
+
+  Future<void> saveYandexOAuthToken(String token) async {
+    await _safeWrite(_keyYandexOAuthToken, token);
+  }
+
+  Future<String?> getYandexOAuthToken() async {
+    return await _safeRead(_keyYandexOAuthToken);
+  }
+
+  Future<void> saveYandexClientId(String clientId) async {
+    await _safeWrite(_keyYandexClientId, clientId);
+  }
+
+  Future<String?> getYandexClientId() async {
+    return await _safeRead(_keyYandexClientId);
+  }
+
+  Future<void> clearYandexCredentials() async {
+    await _safeDelete(_keyYandexOAuthToken);
+    await _safeDelete(_keyYandexClientId);
   }
 
   // --- Backup & Restore of Stored Credentials ---
@@ -98,19 +152,25 @@ class SecureStorageService {
     if (gscRefresh != null) creds[_keyGscRefreshToken] = gscRefresh;
     final gscAccess = await getGscAccessToken();
     if (gscAccess != null) creds[_keyGscAccessToken] = gscAccess;
-    final gscExpiry = await _storage.read(key: _keyGscTokenExpiry);
+    final gscExpiry = await _safeRead(_keyGscTokenExpiry);
     if (gscExpiry != null) creds[_keyGscTokenExpiry] = gscExpiry;
     final gscClient = await getGscClientId();
     if (gscClient != null) creds[_keyGscClientId] = gscClient;
     final bingKey = await getBingApiKey();
     if (bingKey != null) creds[_keyBingApiKey] = bingKey;
+    final yandexToken = await getYandexOAuthToken();
+    if (yandexToken != null) creds[_keyYandexOAuthToken] = yandexToken;
+    final yandexClient = await getYandexClientId();
+    if (yandexClient != null) creds[_keyYandexClientId] = yandexClient;
+    final theme = await getThemeMode();
+    if (theme != null) creds[_keyThemeMode] = theme;
     return creds;
   }
 
   Future<void> restoreCredentials(Map<String, dynamic> creds) async {
     for (final entry in creds.entries) {
       if (entry.value != null) {
-        await _storage.write(key: entry.key, value: entry.value.toString());
+        await _safeWrite(entry.key, entry.value.toString());
       }
     }
   }
@@ -118,6 +178,8 @@ class SecureStorageService {
   // --- Purge All Sensitive State ---
 
   Future<void> clearAllCredentials() async {
-    await _storage.deleteAll();
+    try {
+      await _storage.deleteAll();
+    } catch (_) {}
   }
 }

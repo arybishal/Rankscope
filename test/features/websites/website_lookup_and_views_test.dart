@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rankscope/features/dashboard/presentation/controllers/dashboard_trend_controller.dart';
 import 'package:rankscope/features/dashboard/presentation/views/dashboard_view.dart';
 import 'package:rankscope/features/keywords/presentation/controllers/keywords_controller.dart';
 import 'package:rankscope/features/manual_tracking/presentation/views/manual_tracking_view.dart';
@@ -181,6 +182,10 @@ void main() {
           keywordsRepositoryProvider.overrideWithValue(
             _FakeKeywordsRepository(),
           ),
+          googleConfiguredProvider.overrideWith((ref) async => false),
+          bingConfiguredProvider.overrideWith((ref) async => false),
+          yandexConfiguredProvider.overrideWith((ref) async => false),
+          dashboardTrendProvider.overrideWith((ref, args) async => []),
           gscMetricsFutureProvider.overrideWith((ref, id) async => []),
           gscAggregatesFutureProvider.overrideWith(
             (ref, id) async => {

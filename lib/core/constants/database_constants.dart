@@ -3,7 +3,7 @@ class DatabaseConstants {
   DatabaseConstants._();
 
   static const String databaseName = 'rankscope.db';
-  static const int databaseVersion = 4;
+  static const int databaseVersion = 5;
 
   // Table Names
   static const String tableWebsites = 'websites';
@@ -12,6 +12,7 @@ class DatabaseConstants {
   static const String tableRankObservations = 'rank_observations';
   static const String tableGscSearchAnalytics = 'gsc_search_analytics';
   static const String tableBingSearchAnalytics = 'bing_search_analytics';
+  static const String tableYandexSearchAnalytics = 'yandex_search_analytics';
   static const String tableCompetitorKeywordLinks = 'competitor_keyword_links';
   static const String tableReportsHistory = 'reports_history';
   static const String tableSchemaMigrations = 'schema_migrations';

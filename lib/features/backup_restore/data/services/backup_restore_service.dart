@@ -40,6 +40,7 @@ class BackupRestoreService {
   /// Exports a complete, AES-256-GCM encrypted backup bundle to disk.
   Future<File> exportEncryptedBackup({
     required String password,
+    bool includeCredentials = true,
     String? destinationDirPath,
   }) async {
     if (password.trim().isEmpty) {
@@ -69,6 +70,14 @@ class BackupRestoreService {
     final List<Map<String, dynamic>> bingRecords = await db.query(
       DatabaseConstants.tableBingSearchAnalytics,
     );
+    List<Map<String, dynamic>> yandexRecords = [];
+    try {
+      yandexRecords = await db.query(
+        DatabaseConstants.tableYandexSearchAnalytics,
+      );
+    } catch (_) {
+      // Table may not exist on pre-v5 schemas
+    }
     final List<Map<String, dynamic>> compLinks = await db.query(
       DatabaseConstants.tableCompetitorKeywordLinks,
     );
@@ -76,23 +85,26 @@ class BackupRestoreService {
       DatabaseConstants.tableReportsHistory,
     );
 
-    // 3. Extract secure hardware credentials
-    final Map<String, String> credentials = await _secureStorage
-        .getAllCredentials();
+    // 3. Extract secure hardware credentials if explicitly enabled by user
+    final Map<String, String> credentials = includeCredentials
+        ? await _secureStorage.getAllCredentials()
+        : {};
 
     // 4. Construct complete backup payload
     final now = DateTime.now();
     final Map<String, dynamic> payload = {
       'app': 'RankScope',
-      'version': '1.0.0',
+      'version': '2.0.0',
       'database_version': DatabaseConstants.databaseVersion,
       'exported_at': now.toIso8601String(),
+      'credentials_included': includeCredentials,
       'stats': {
         'websites_count': websites.length,
         'keywords_count': keywords.length,
         'manual_records_count': manualRecords.length,
         'gsc_records_count': gscRecords.length,
         'bing_records_count': bingRecords.length,
+        'yandex_records_count': yandexRecords.length,
         'integrations_count': credentials.length,
       },
       'data': {
@@ -102,6 +114,7 @@ class BackupRestoreService {
         'rank_observations': rankObservations,
         'gsc_search_analytics': gscRecords,
         'bing_search_analytics': bingRecords,
+        'yandex_search_analytics': yandexRecords,
         'competitor_keyword_links': compLinks,
         'reports_history': reportsHistory,
         'credentials': credentials,
@@ -143,7 +156,7 @@ class BackupRestoreService {
     // 8. Package encrypted envelope
     final Map<String, dynamic> envelope = {
       'format': 'rankscope_encrypted_backup',
-      'version': 1,
+      'version': 2,
       'kdf': 'PBKDF2_HMAC_SHA256',
       'kdf_iterations': _pbkdf2Iterations,
       'cipher': 'AES_256_GCM',
@@ -163,10 +176,26 @@ class BackupRestoreService {
     );
 
     await backupFile.writeAsString(jsonEncode(envelope), flush: true);
+
+    // 10. Self-verify export integrity before declaring success
+    try {
+      await inspectAndDecryptBackup(
+        filePath: backupFile.path,
+        password: password,
+      );
+    } catch (e) {
+      if (await backupFile.exists()) {
+        await backupFile.delete();
+      }
+      throw ValidationException(
+        'Export verification failed. Backup file could not be verified: $e',
+      );
+    }
+
     await AppLogger.instance.info(
       'Backup',
       'backup_exported',
-      'Encrypted backup exported: ${backupFile.path}',
+      'Encrypted backup exported & verified: ${backupFile.path} (Credentials: $includeCredentials)',
     );
     return backupFile;
   }
@@ -247,15 +276,21 @@ class BackupRestoreService {
     final manualRecords = data['manual_rank_records'] as List? ?? [];
     final gscRecords = data['gsc_search_analytics'] as List? ?? [];
     final bingRecords = data['bing_search_analytics'] as List? ?? [];
+    final yandexRecords = data['yandex_search_analytics'] as List? ?? [];
     final credentials = data['credentials'] as Map<String, dynamic>? ?? {};
 
     return {
       'exported_at': payload['exported_at'] ?? envelope['created_at'],
       'version': payload['version'] ?? '1.0.0',
+      'credentials_included':
+          payload['credentials_included'] ?? (credentials.isNotEmpty),
       'websites_count': websites.length,
       'keywords_count': keywords.length,
       'ranking_records_count':
-          manualRecords.length + gscRecords.length + bingRecords.length,
+          manualRecords.length +
+          gscRecords.length +
+          bingRecords.length +
+          yandexRecords.length,
       'integrations_count': credentials.length,
       'payload': payload,
     };
@@ -292,6 +327,9 @@ class BackupRestoreService {
         await txn.delete(DatabaseConstants.tableReportsHistory);
         await txn.delete(DatabaseConstants.tableGscSearchAnalytics);
         await txn.delete(DatabaseConstants.tableBingSearchAnalytics);
+        try {
+          await txn.delete(DatabaseConstants.tableYandexSearchAnalytics);
+        } catch (_) {}
         await txn.delete(DatabaseConstants.tableRankObservations);
         await txn.delete(DatabaseConstants.tableManualRankRecords);
         await txn.delete(DatabaseConstants.tableKeywords);
@@ -337,6 +375,15 @@ class BackupRestoreService {
             .cast<Map<String, dynamic>>();
         for (final row in bingRecords) {
           await txn.insert(DatabaseConstants.tableBingSearchAnalytics, row);
+        }
+
+        // Repopulate Yandex records
+        final yandexRecords = (data['yandex_search_analytics'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
+        for (final row in yandexRecords) {
+          try {
+            await txn.insert(DatabaseConstants.tableYandexSearchAnalytics, row);
+          } catch (_) {}
         }
 
         // Repopulate competitor keyword links
@@ -579,6 +626,27 @@ class BackupRestoreService {
           conflictAlgorithm: ConflictAlgorithm.ignore,
         );
         if (id > 0) rankRecordsAdded++;
+      }
+
+      // Merge Yandex Analytics
+      final yandexRecords = (data['yandex_search_analytics'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
+      for (final yandexRow in yandexRecords) {
+        final oldSiteId = yandexRow['website_id'] as int;
+        final mappedSiteId = websiteIdMap[oldSiteId];
+        if (mappedSiteId == null) continue;
+
+        final insertMap = Map<String, dynamic>.from(yandexRow)
+          ..remove('id')
+          ..['website_id'] = mappedSiteId;
+        try {
+          final id = await txn.insert(
+            DatabaseConstants.tableYandexSearchAnalytics,
+            insertMap,
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          if (id > 0) rankRecordsAdded++;
+        } catch (_) {}
       }
     });
 

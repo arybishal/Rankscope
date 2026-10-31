@@ -14,11 +14,12 @@ void main() {
     // Verify RankScope header is present
     expect(find.text('RankScope'), findsWidgets);
 
-    // Verify Bottom Navigation tabs are present
+    // Verify Bottom Navigation tabs are present for all 6 primary sections
     expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Keywords'), findsOneWidget);
+    expect(find.text('Analysis'), findsOneWidget);
     expect(find.text('SERP Audit'), findsOneWidget);
-    expect(find.text('GSC'), findsOneWidget);
-    expect(find.text('Bing'), findsOneWidget);
+    expect(find.text('Engines'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
   });
 }

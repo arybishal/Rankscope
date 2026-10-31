@@ -4,15 +4,23 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:rankscope/core/constants/api_documentation_urls.dart';
 import 'package:rankscope/core/logging/app_logger.dart';
 import 'package:rankscope/core/security/secure_storage_service.dart';
 import 'package:rankscope/core/theme/app_colors.dart';
 import 'package:rankscope/core/theme/app_text_styles.dart';
 import 'package:rankscope/core/theme/spacing.dart';
+import 'package:rankscope/core/theme/theme_controller.dart';
 import 'package:rankscope/features/backup_restore/data/services/backup_restore_service.dart';
 import 'package:rankscope/features/bing_webmaster/presentation/controllers/bing_controller.dart';
+import 'package:rankscope/features/dashboard/presentation/controllers/dashboard_trend_controller.dart';
+import 'package:rankscope/features/dashboard/presentation/views/dashboard_view.dart'
+    hide yandexConfiguredProvider;
+import 'package:rankscope/features/keywords/presentation/controllers/keywords_controller.dart';
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
+import 'package:rankscope/features/yandex_webmaster/presentation/controllers/yandex_controller.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 final secureStorageServiceProvider = Provider<SecureStorageService>((ref) {
   return SecureStorageService();
@@ -32,8 +40,10 @@ class SettingsView extends ConsumerStatefulWidget {
 class _SettingsViewState extends ConsumerState<SettingsView> {
   final _bingKeyController = TextEditingController();
   final _gscClientController = TextEditingController();
+  final _yandexTokenController = TextEditingController();
   bool _isLoadingKeys = true;
   bool _isTestingBingKey = false;
+  bool _isTestingYandexToken = false;
   DateTime? _lastBackupDate;
   int _logErrorCount = 0;
   int _totalLogCount = 0;
@@ -59,11 +69,13 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     final storage = ref.read(secureStorageServiceProvider);
     final bingKey = await storage.getBingApiKey();
     final gscClient = await storage.getGscClientId();
+    final yandexToken = await storage.getYandexOAuthToken();
 
     if (mounted) {
       setState(() {
         _bingKeyController.text = bingKey ?? '';
         _gscClientController.text = gscClient ?? '';
+        _yandexTokenController.text = yandexToken ?? '';
         _isLoadingKeys = false;
       });
     }
@@ -73,6 +85,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   void dispose() {
     _bingKeyController.dispose();
     _gscClientController.dispose();
+    _yandexTokenController.dispose();
     super.dispose();
   }
 
@@ -156,12 +169,75 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     }
   }
 
+  Future<void> _saveYandexToken() async {
+    final storage = ref.read(secureStorageServiceProvider);
+    final token = _yandexTokenController.text.trim();
+    if (token.isNotEmpty) {
+      await storage.saveYandexOAuthToken(token);
+      await AppLogger.instance.info(
+        'Settings',
+        'yandex_token_saved',
+        'Saved Yandex OAuth token in Android KeyStore',
+      );
+    } else {
+      await storage.clearYandexCredentials();
+      await AppLogger.instance.info(
+        'Settings',
+        'yandex_token_cleared',
+        'Cleared Yandex OAuth token',
+      );
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Yandex OAuth token saved to Android KeyStore.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _testYandexConnection() async {
+    setState(() => _isTestingYandexToken = true);
+    final token = _yandexTokenController.text.trim();
+    if (token.isNotEmpty) {
+      final storage = ref.read(secureStorageServiceProvider);
+      await storage.saveYandexOAuthToken(token);
+    }
+
+    final hosts = await ref
+        .read(yandexSyncNotifierProvider.notifier)
+        .testConnection();
+    if (!mounted) return;
+    setState(() => _isTestingYandexToken = false);
+
+    if (hosts != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            hosts.isNotEmpty
+                ? 'Yandex API connected! Found ${hosts.length} verified host(s).'
+                : 'Yandex API connected, but no verified hosts found on this account.',
+          ),
+          backgroundColor: AppColors.rankGain,
+        ),
+      );
+    } else {
+      final error =
+          ref.read(yandexSyncNotifierProvider).errorMessage ??
+          'Connection failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: AppColors.rankDrop),
+      );
+    }
+  }
+
   // --- Complete Encrypted Export Backup Flow ---
 
   Future<void> _showExportBackupDialog() async {
     final passwordController = TextEditingController();
     final confirmController = TextEditingController();
     bool obscure = true;
+    bool includeCredentials = true;
 
     final shouldExport = await showDialog<bool>(
       context: context,
@@ -237,6 +313,23 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     labelText: 'Confirm Password',
                   ),
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: includeCredentials,
+                  onChanged: (val) {
+                    setDialogState(() => includeCredentials = val ?? true);
+                  },
+                  title: const Text(
+                    'Include API credentials & OAuth tokens',
+                    style: AppTextStyles.labelMedium,
+                  ),
+                  subtitle: const Text(
+                    'Credentials will be encrypted within the backup archive',
+                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
               ],
             ),
           ),
@@ -278,7 +371,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         );
 
         final service = ref.read(backupRestoreServiceProvider);
-        final file = await service.exportEncryptedBackup(password: password);
+        final file = await service.exportEncryptedBackup(
+          password: password,
+          includeCredentials: includeCredentials,
+        );
 
         setState(() {
           _lastBackupDate = DateTime.now();
@@ -455,17 +551,55 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
               _RestoreModeOption(
                 icon: Icons.restore_page_outlined,
                 title: 'Full Restore (Replace All)',
-                description: 'Overwrites live database with backup data. An automatic recovery snapshot is saved before replacement.',
+                description:
+                    'Overwrites live database with backup data. An automatic recovery snapshot is saved before replacement.',
                 onTap: () async {
                   Navigator.of(ctx).pop();
-                  await _executeFullRestore(payload);
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (alertCtx) => AlertDialog(
+                      backgroundColor: AppColors.surfacePrimary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.cardRadius,
+                        ),
+                        side: const BorderSide(color: AppColors.borderSubtle),
+                      ),
+                      title: const Text(
+                        'Confirm Full Replacement',
+                        style: AppTextStyles.titleLarge,
+                      ),
+                      content: const Text(
+                        'Warning: This action will replace all current websites, keywords, and tracking history with the records from the backup archive.\n\nAn automatic recovery snapshot will be saved on device before replacement.\n\nAre you sure you want to proceed?',
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(alertCtx).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.rankDrop,
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: () => Navigator.of(alertCtx).pop(true),
+                          child: const Text('Replace All Data'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    await _executeFullRestore(payload);
+                  }
                 },
               ),
               const SizedBox(height: AppSpacing.sm),
               _RestoreModeOption(
                 icon: Icons.merge_type,
                 title: 'Merge Import (Safe Non-Destructive)',
-                description: 'Adds imported websites and keywords without deleting existing data or creating duplicate domains.',
+                description:
+                    'Adds imported websites and keywords without deleting existing data or creating duplicate domains.',
                 onTap: () async {
                   Navigator.of(ctx).pop();
                   await _executeMergeImport(payload);
@@ -509,7 +643,22 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     try {
       final service = ref.read(backupRestoreServiceProvider);
       await service.performFullRestore(payload);
+
+      // Reload database records into Riverpod state
+      final sites = await ref.read(websitesRepositoryProvider).getWebsites();
       await ref.read(websitesProvider.notifier).loadWebsites();
+      if (sites.isNotEmpty) {
+        ref.read(selectedWebsiteIdProvider.notifier).select(sites.first.id);
+      }
+
+      // Invalidate all downstream cached Riverpod family and future providers
+      ref.invalidate(keywordsFamilyProvider);
+      ref.invalidate(dashboardTrendProvider);
+      ref.invalidate(cannibalizationAlertsFamilyProvider);
+      ref.invalidate(googleConfiguredProvider);
+      ref.invalidate(bingConfiguredProvider);
+      ref.invalidate(yandexConfiguredProvider);
+
       await _loadStoredCredentials();
       await _loadLogStats();
 
@@ -539,7 +688,22 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     try {
       final service = ref.read(backupRestoreServiceProvider);
       final stats = await service.performMergeImport(payload);
+
+      // Reload database records into Riverpod state
+      final sites = await ref.read(websitesRepositoryProvider).getWebsites();
       await ref.read(websitesProvider.notifier).loadWebsites();
+      if (sites.isNotEmpty && ref.read(selectedWebsiteIdProvider) == null) {
+        ref.read(selectedWebsiteIdProvider.notifier).select(sites.first.id);
+      }
+
+      // Invalidate all downstream cached Riverpod family and future providers
+      ref.invalidate(keywordsFamilyProvider);
+      ref.invalidate(dashboardTrendProvider);
+      ref.invalidate(cannibalizationAlertsFamilyProvider);
+      ref.invalidate(googleConfiguredProvider);
+      ref.invalidate(bingConfiguredProvider);
+      ref.invalidate(yandexConfiguredProvider);
+
       await _loadStoredCredentials();
       await _loadLogStats();
 
@@ -571,8 +735,15 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentThemeMode = ref.watch(themeModeProvider);
+    final cardBg = isDark ? AppColors.darkCard : AppColors.surfacePrimary;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.borderSubtle;
+    final secondaryBg =
+        isDark ? AppColors.darkSurfaceSecondary : AppColors.surfaceSecondary;
+
     return Scaffold(
-      backgroundColor: AppColors.surfacePrimary,
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
       appBar: AppBar(
         title: const Text(
           'Settings & Privacy',
@@ -586,6 +757,62 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
           : ListView(
               padding: const EdgeInsets.all(AppSpacing.md),
               children: [
+                // Theme & Appearance
+                const Text(
+                  'APPEARANCE & THEME',
+                  style: AppTextStyles.labelSmall,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Display Mode',
+                        style: AppTextStyles.labelLarge,
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Choose between light, dark, or system default theme.',
+                        style: AppTextStyles.bodySmall,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      SegmentedButton<ThemeMode>(
+                        segments: const [
+                          ButtonSegment<ThemeMode>(
+                            value: ThemeMode.system,
+                            label: Text('System'),
+                            icon: Icon(Icons.brightness_auto, size: 16),
+                          ),
+                          ButtonSegment<ThemeMode>(
+                            value: ThemeMode.light,
+                            label: Text('Light'),
+                            icon: Icon(Icons.light_mode, size: 16),
+                          ),
+                          ButtonSegment<ThemeMode>(
+                            value: ThemeMode.dark,
+                            label: Text('Dark'),
+                            icon: Icon(Icons.dark_mode, size: 16),
+                          ),
+                        ],
+                        selected: {currentThemeMode},
+                        onSelectionChanged: (Set<ThemeMode> newSelection) {
+                          ref
+                              .read(themeModeProvider.notifier)
+                              .setThemeMode(newSelection.first);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
                 // Manage Websites
                 const Text(
                   'WEBSITES & PROPERTIES',
@@ -616,9 +843,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: AppColors.surfacePrimary,
+                    color: cardBg,
                     borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                    border: Border.all(color: AppColors.borderSubtle),
+                    border: Border.all(color: borderColor),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -698,18 +925,18 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   child: Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: AppColors.surfacePrimary,
+                      color: cardBg,
                       borderRadius: BorderRadius.circular(
                         AppSpacing.cardRadius,
                       ),
-                      border: Border.all(color: AppColors.borderSubtle),
+                      border: Border.all(color: borderColor),
                     ),
                     child: Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceSecondary,
+                            color: secondaryBg,
                             borderRadius: BorderRadius.circular(
                               AppSpacing.cardRadius,
                             ),
@@ -794,9 +1021,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: AppColors.surfacePrimary,
+                    color: cardBg,
                     borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                    border: Border.all(color: AppColors.borderSubtle),
+                    border: Border.all(color: borderColor),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -859,9 +1086,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: AppColors.surfacePrimary,
+                    color: cardBg,
                     borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                    border: Border.all(color: AppColors.borderSubtle),
+                    border: Border.all(color: borderColor),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -892,6 +1119,126 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
+                // Yandex Webmaster Tools
+                const Text(
+                  'YANDEX WEBMASTER (OPTIONAL)',
+                  style: AppTextStyles.labelSmall,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: AppColors.yandexRed.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Icon(
+                              Icons.search,
+                              size: 16,
+                              color: AppColors.yandexRed,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Yandex OAuth 2.0 Token',
+                            style: AppTextStyles.labelLarge,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Direct OAuth access to Yandex Webmaster API v4 without servers or third parties. Stored securely in Android KeyStore.',
+                        style: AppTextStyles.bodySmall,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: secondaryBg,
+                          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Required Scopes:',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.yandexRed,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              '• webmaster:verify (Read verification status)\n'
+                              '• webmaster:hostinfo (Read search queries and hosts)',
+                              style: TextStyle(fontSize: 11, height: 1.4),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Get Token: Register an app at oauth.yandex.ru with the scopes above, set Redirect URI to https://oauth.yandex.ru/verification_code, and paste the OAuth token below.',
+                              style: TextStyle(fontSize: 10, color: AppColors.textTertiary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      TextField(
+                        controller: _yandexTokenController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          hintText: 'Paste Yandex OAuth token (y0_...)...',
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          ElevatedButton(
+                            onPressed: _saveYandexToken,
+                            child: const Text('Save Yandex Token'),
+                          ),
+                          OutlinedButton(
+                            onPressed: _isTestingYandexToken
+                                ? null
+                                : _testYandexConnection,
+                            child: _isTestingYandexToken
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.accent,
+                                    ),
+                                  )
+                                : const Text('Test Connection'),
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.open_in_new, size: 14),
+                            label: const Text('View Yandex Analytics'),
+                            onPressed: () => context.push('/yandex-webmaster'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
                 // Privacy Manifesto Summary
                 const Text(
                   'DATA SOVEREIGNTY & PRIVACY',
@@ -901,9 +1248,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceSecondary,
+                    color: secondaryBg,
                     borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                    border: Border.all(color: AppColors.borderSubtle),
+                    border: Border.all(color: borderColor),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -945,9 +1292,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: AppColors.surfacePrimary,
+                    color: cardBg,
                     borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                    border: Border.all(color: AppColors.borderSubtle),
+                    border: Border.all(color: borderColor),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -957,7 +1304,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFEFF6FF),
+                              color: isDark
+                                  ? AppColors.darkSurfaceSecondary
+                                  : const Color(0xFFEFF6FF),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(
@@ -976,7 +1325,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                                   style: AppTextStyles.titleMedium,
                                 ),
                                 Text(
-                                  'v1.0.4+5 • Local-First SEO Intelligence',
+                                  'v2.0.0 • Local-First SEO & Rank Intelligence',
                                   style: AppTextStyles.bodySmall,
                                 ),
                               ],
@@ -985,17 +1334,17 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                      Divider(height: 1, color: borderColor),
                       const SizedBox(height: AppSpacing.md),
-                      const Row(
+                      Row(
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.code,
                             size: 16,
                             color: AppColors.textSecondary,
                           ),
-                          SizedBox(width: 8),
-                          Text(
+                          const SizedBox(width: 8),
+                          const Text(
                             'Developer: ',
                             style: TextStyle(
                               fontSize: 13,
@@ -1005,83 +1354,115 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                           ),
                           Expanded(
                             child: Text(
-                              '.com.npAryal',
+                              'Bishal Aryal',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
+                                color: isDark
+                                    ? AppColors.darkTextPrimary
+                                    : AppColors.textPrimary,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       InkWell(
                         borderRadius: BorderRadius.circular(6),
-                        onTap: () {
-                          Clipboard.setData(
-                            const ClipboardData(
-                              text: 'https://bishalaryal.com.np',
-                            ),
-                          );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Author URL copied: bishalaryal.com.np',
-                              ),
-                              backgroundColor: AppColors.accent,
-                            ),
-                          );
+                        onTap: () async {
+                          final uri = Uri.parse(ApiDocumentationUrls.developerWebsite);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
                         },
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.link,
                                 size: 16,
-                                color: AppColors.accent,
+                                color: Color(0xFF2563EB),
                               ),
-                              SizedBox(width: 8),
-                              Text(
-                                'author url: ',
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Author Website: ',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.textSecondary,
                                 ),
                               ),
-                              Expanded(
+                              const Expanded(
                                 child: Text(
-                                  'bishalaryal.com.np',
+                                  'https://bishalaryal.com.np',
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: AppColors.accent,
+                                    color: Color(0xFF2563EB),
                                     decoration: TextDecoration.underline,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              Icon(
-                                Icons.copy,
-                                size: 14,
-                                color: AppColors.accent,
+                              IconButton(
+                                constraints: const BoxConstraints(),
+                                padding: const EdgeInsets.all(4),
+                                icon: const Icon(
+                                  Icons.copy,
+                                  size: 14,
+                                  color: Color(0xFF2563EB),
+                                ),
+                                tooltip: 'Copy Author URL',
+                                onPressed: () {
+                                  Clipboard.setData(
+                                    const ClipboardData(
+                                      text: ApiDocumentationUrls.developerWebsite,
+                                    ),
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Author URL copied: https://bishalaryal.com.np',
+                                      ),
+                                      backgroundColor: AppColors.accent,
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.explore_outlined, size: 16),
-                          label: const Text('Replay App Feature Tour'),
-                          onPressed: () =>
-                              context.push('/onboarding?revisit=true'),
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.explore_outlined, size: 16),
+                              label: const Text('Replay App Feature Tour'),
+                              onPressed: () =>
+                                  context.push('/onboarding?revisit=true'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.policy_outlined, size: 16),
+                              label: const Text('Open Source Licenses'),
+                              onPressed: () {
+                                showLicensePage(
+                                  context: context,
+                                  applicationName: 'RankScope',
+                                  applicationVersion: 'v2.0.0',
+                                  applicationLegalese:
+                                      'Crafted with precision by Bishal Aryal.\nStrictly device-first, \$0 budget SEO intelligence.',
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1108,11 +1489,15 @@ class _SettingsNavCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.darkCard : AppColors.surfacePrimary;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.borderSubtle;
+
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfacePrimary,
+        color: cardBg,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-        border: Border.all(color: AppColors.borderSubtle),
+        border: Border.all(color: borderColor),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
@@ -1161,15 +1546,20 @@ class _RestoreModeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final secondaryBg =
+        isDark ? AppColors.darkSurfaceSecondary : AppColors.surfaceSecondary;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.borderSubtle;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
-          color: AppColors.surfaceSecondary,
+          color: secondaryBg,
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-          border: Border.all(color: AppColors.borderSubtle),
+          border: Border.all(color: borderColor),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,

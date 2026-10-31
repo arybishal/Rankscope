@@ -43,6 +43,7 @@ class WebsitesNotifier extends AsyncNotifier<List<Website>> {
     bool isCompetitor = false,
     String? gscPropertyId,
     String? bingSiteUrl,
+    String? yandexHostId,
     String? notes,
   }) async {
     final repo = ref.read(websitesRepositoryProvider);
@@ -53,6 +54,7 @@ class WebsitesNotifier extends AsyncNotifier<List<Website>> {
       isCompetitor: isCompetitor,
       gscPropertyId: gscPropertyId,
       bingSiteUrl: bingSiteUrl,
+      yandexHostId: yandexHostId,
       notes: notes,
       createdAt: now,
       updatedAt: now,

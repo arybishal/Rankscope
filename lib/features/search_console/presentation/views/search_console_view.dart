@@ -8,6 +8,7 @@ import 'package:rankscope/features/search_console/domain/entities/gsc_metric.dar
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
 import 'package:rankscope/shared/widgets/cards/rank_metric_card.dart';
 import 'package:rankscope/shared/widgets/feedback/empty_state_view.dart';
+import 'package:rankscope/shared/widgets/surfaces/glass_container.dart';
 
 final localGscDatasourceProvider = Provider<LocalGscDatasource>((ref) {
   return LocalGscDatasource();
@@ -32,11 +33,12 @@ class SearchConsoleView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final websitesState = ref.watch(websitesProvider);
     final selectedSiteId = ref.watch(selectedWebsiteIdProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.surfacePrimary,
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
       appBar: AppBar(
         title: const Text(
           'Google Search Console',
@@ -54,7 +56,7 @@ class SearchConsoleView extends ConsumerWidget {
             return const EmptyStateView(
               icon: Icons.search,
               title: 'No Website Selected',
-              description: 'Register a website on the Dashboard tab to view Google Search Console metrics.',
+              description: 'Register a website on the Overview tab to view Google Search Console metrics.',
             );
           }
 
@@ -68,28 +70,24 @@ class SearchConsoleView extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
-              // Mandatory Disambiguation Alert Box
-              Container(
+              // Disambiguation Alert Box
+              GlassContainer(
                 padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceSecondary,
-                  borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                  border: Border.all(color: AppColors.borderMedium),
-                ),
+                borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.info_outline,
                       size: 20,
-                      color: AppColors.textSecondary,
+                      color: isDark ? const Color(0xFF60A5FA) : AppColors.accent,
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
-                        'Google Search Console average position is a statistical aggregate computed over impressions and varies by personalization, date, and device. It is distinct from discrete point-in-time SERP rankings.',
+                        'Google Search Console average position is a statistical aggregate computed over impressions across search queries, devices, and dates. It is distinct from discrete point-in-time SERP rankings.',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
+                          color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                         ),
                       ),
                     ),
@@ -155,9 +153,11 @@ class SearchConsoleView extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
 
-              const Text(
+              Text(
                 'Top Search Queries',
-                style: AppTextStyles.titleMedium,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
 
@@ -171,32 +171,30 @@ class SearchConsoleView extends ConsumerWidget {
                 error: (e, _) => Text('Error: $e'),
                 data: (metrics) {
                   if (metrics.isEmpty) {
-                    return Container(
+                    return GlassContainer(
                       padding: const EdgeInsets.all(AppSpacing.lg),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceSecondary,
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.cardRadius,
-                        ),
-                        border: Border.all(color: AppColors.borderSubtle),
-                      ),
-                      child: const Column(
+                      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                      child: Column(
                         children: [
                           Icon(
                             Icons.cloud_sync_outlined,
                             size: 40,
-                            color: AppColors.textTertiary,
+                            color: isDark ? AppColors.darkTextTertiary : AppColors.textTertiary,
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Text(
                             'No Search Console Data Synced Yet',
-                            style: AppTextStyles.labelLarge,
+                            style: AppTextStyles.labelLarge.copyWith(
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                            ),
                           ),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           Text(
-                            'Connect your Google Search Console account via Settings to pull verified organic search queries without any middleman.',
+                            'Connect your Google Search Console account via Settings to pull verified organic search queries directly to your device.',
                             textAlign: TextAlign.center,
-                            style: AppTextStyles.bodySmall,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                            ),
                           ),
                         ],
                       ),
@@ -211,15 +209,9 @@ class SearchConsoleView extends ConsumerWidget {
                         const SizedBox(height: AppSpacing.xs),
                     itemBuilder: (context, index) {
                       final m = metrics[index];
-                      return Container(
+                      return GlassContainer(
                         padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfacePrimary,
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.cardRadius,
-                          ),
-                          border: Border.all(color: AppColors.borderSubtle),
-                        ),
+                        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
                         child: Row(
                           children: [
                             Expanded(
@@ -228,12 +220,16 @@ class SearchConsoleView extends ConsumerWidget {
                                 children: [
                                   Text(
                                     m.query,
-                                    style: AppTextStyles.labelLarge,
+                                    style: AppTextStyles.labelLarge.copyWith(
+                                      color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                                    ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     '${m.clicks} clicks • ${m.impressions} impr.',
-                                    style: AppTextStyles.bodySmall,
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -244,17 +240,19 @@ class SearchConsoleView extends ConsumerWidget {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.surfaceSecondary,
+                                color: isDark ? AppColors.darkSurfaceSecondary : AppColors.surfaceSecondary,
                                 borderRadius: BorderRadius.circular(
                                   AppSpacing.badgeRadius,
                                 ),
                                 border: Border.all(
-                                  color: AppColors.borderSubtle,
+                                  color: isDark ? AppColors.darkBorderSubtle : AppColors.borderSubtle,
                                 ),
                               ),
                               child: Text(
                                 'Avg #${m.averagePosition.toStringAsFixed(1)}',
-                                style: AppTextStyles.labelMedium,
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                                ),
                               ),
                             ),
                           ],

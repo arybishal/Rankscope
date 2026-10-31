@@ -2,16 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:rankscope/core/theme/app_colors.dart';
-import 'package:rankscope/core/theme/app_text_styles.dart';
-import 'package:rankscope/core/theme/spacing.dart';
-import 'package:rankscope/core/utils/date_formatter.dart';
-import 'package:rankscope/core/utils/url_validator.dart';
-import 'package:rankscope/features/keywords/presentation/controllers/keywords_controller.dart';
-import 'package:rankscope/features/websites/domain/entities/website.dart';
-import 'package:rankscope/shared/widgets/cards/ranking_badge.dart';
-import 'package:rankscope/shared/widgets/dialogs/add_keyword_dialog.dart';
-import 'package:rankscope/shared/widgets/dialogs/log_rank_dialog.dart';
+
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/theme/spacing.dart';
+import '../../../../core/utils/date_formatter.dart';
+import '../../../../core/utils/url_validator.dart';
+import '../../../../shared/widgets/cards/ranking_badge.dart';
+import '../../../../shared/widgets/charts/trend_line_chart.dart';
+import '../../../../shared/widgets/dialogs/add_keyword_dialog.dart';
+import '../../../../shared/widgets/dialogs/log_rank_dialog.dart';
+import '../../../websites/domain/entities/website.dart';
+import '../controllers/keywords_controller.dart';
 
 class KeywordDetailsView extends ConsumerStatefulWidget {
   final Keyword initialKeyword;
@@ -31,6 +33,7 @@ enum _TimeRange { sevenDays, thirtyDays, ninetyDays, all }
 
 class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
   _TimeRange _timeRange = _TimeRange.thirtyDays;
+  String _activeEngineTab = 'All'; // 'All', 'Google', 'Bing', 'Yandex', 'Manual'
 
   void _openEditDialog(BuildContext context, Keyword kw) {
     showDialog(
@@ -52,7 +55,7 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfacePrimary,
+        backgroundColor: Theme.of(context).cardColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
           side: const BorderSide(color: AppColors.borderSubtle),
@@ -97,6 +100,7 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final keywordsAsync = ref.watch(keywordsFamilyProvider(widgetWebsiteId));
     final observationsAsync = ref.watch(
       keywordObservationsFamilyProvider(widget.initialKeyword.id!),
@@ -112,11 +116,13 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
     );
 
     return Scaffold(
-      backgroundColor: AppColors.surfacePrimary,
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
       appBar: AppBar(
         title: Text(
           keyword.keywordText,
-          style: AppTextStyles.titleLarge,
+          style: AppTextStyles.titleLarge.copyWith(
+            color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+          ),
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
@@ -135,8 +141,12 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.surfacePrimary,
-          border: Border(top: BorderSide(color: AppColors.borderSubtle)),
+          color: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
+          border: Border(
+            top: BorderSide(
+              color: isDark ? AppColors.darkBorderSubtle : AppColors.borderSubtle,
+            ),
+          ),
         ),
         child: Row(
           children: [
@@ -160,8 +170,8 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
             Expanded(
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: AppColors.surfacePrimary,
+                  backgroundColor: isDark ? const Color(0xFF2563EB) : AppColors.accent,
+                  foregroundColor: Colors.white,
                 ),
                 icon: const Icon(Icons.add_chart, size: 18),
                 label: const Text('Log SERP Rank'),
@@ -174,7 +184,7 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
-          // Keyword Metadata & Status Row
+          // 1. Keyword Metadata & Status Chips
           Wrap(
             spacing: 6,
             runSpacing: 4,
@@ -182,9 +192,7 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
             children: [
               _StatusPill(
                 label: keyword.isActive ? 'Active' : 'Paused',
-                color: keyword.isActive
-                    ? AppColors.rankGain
-                    : AppColors.textTertiary,
+                color: keyword.isActive ? AppColors.rankGain : AppColors.textTertiary,
               ),
               if (keyword.isNew)
                 const _StatusPill(label: 'NEW', color: AppColors.accent),
@@ -194,146 +202,77 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                 const _StatusPill(label: 'RECOVERED', color: Color(0xFF16A34A)),
               Text(
                 '• ${keyword.targetCountry} • ${keyword.device}',
-                style: AppTextStyles.bodySmall,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
 
-          // Search Console & Bing Search Performance Card
-          _buildPerformanceCard(keyword),
+          // 2. Separate Engine Tabs (All, Google, Bing, Yandex, Manual SERP)
+          _buildEngineTabBar(isDark),
           const SizedBox(height: AppSpacing.md),
 
-          // SERP Audit Manual Positions Comparison Card
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceSecondary,
-              borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-              border: Border.all(color: AppColors.borderSubtle),
+          // 3. Search Performance Overview Card for Selected Engine
+          _buildPerformanceCard(isDark, keyword),
+          const SizedBox(height: AppSpacing.md),
+
+          // 4. Educational Disambiguation Card: Avg Position vs Exact Rank
+          _buildDisambiguationCard(isDark),
+          const SizedBox(height: AppSpacing.md),
+
+          // 5. Position Trend Chart Over Selected Timeframe
+          observationsAsync.when(
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(color: AppColors.accent),
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.rule, size: 16, color: AppColors.textSecondary),
-                    SizedBox(width: 6),
-                    Text(
-                      'Manual SERP Audit Positions',
-                      style: AppTextStyles.labelLarge,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _EnginePositionTile(
-                        engineName: 'Google',
-                        position: keyword.googlePosition,
-                        delta: keyword.googleDelta,
-                        previousPos: keyword.googlePreviousPosition,
-                        icon: Icons.search,
-                      ),
-                    ),
-                    Container(
-                      width: 1,
-                      height: 50,
-                      color: AppColors.borderSubtle,
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                      ),
-                    ),
-                    Expanded(
-                      child: _EnginePositionTile(
-                        engineName: 'Bing',
-                        position: keyword.bingPosition,
-                        delta: keyword.bingDelta,
-                        previousPos: keyword.bingPreviousPosition,
-                        icon: Icons.travel_explore,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+            error: (e, _) => Center(child: Text('Error: $e')),
+            data: (observations) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildTrendChartSection(isDark, observations),
+                  const SizedBox(height: AppSpacing.md),
+                  _buildUrlChangeHistorySection(isDark, keyword, observations),
+                ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.md),
 
-          // Cannibalization Alert Banner (if detected)
+          // 6. Cannibalization Alert Banner (if detected)
           if (keyword.hasCannibalization) ...[
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                border: Border.all(color: const Color(0xFFFECACA)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        color: AppColors.rankDrop,
-                        size: 20,
-                      ),
-                      SizedBox(width: 6),
-                      Text(
-                        'Potential Cannibalization Alert',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.rankDrop,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    keyword.cannibalizationStatus == 'url_switching'
-                        ? 'Frequent URL switching detected: search engines are oscillating between multiple URLs for this query.'
-                        : 'Multiple distinct URLs were observed ranking for this query across observation checks.',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color(0xFF7F1D1D),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildCannibalizationBanner(isDark, keyword),
             const SizedBox(height: AppSpacing.md),
           ],
 
-          // Target URL & Landing Pages Section
-          _buildLandingPagesSection(context, keyword),
+          // 7. Target URL & Landing Pages Matching Section
+          _buildLandingPagesSection(context, isDark, keyword),
           const SizedBox(height: AppSpacing.lg),
 
-          // Observation History & Timeline
+          // 8. Observation History Timeline & Filters
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Observation History',
-                style: AppTextStyles.titleMedium,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                ),
               ),
               SegmentedButton<_TimeRange>(
                 segments: const [
                   ButtonSegment(value: _TimeRange.sevenDays, label: Text('7D')),
-                  ButtonSegment(
-                    value: _TimeRange.thirtyDays,
-                    label: Text('30D'),
-                  ),
-                  ButtonSegment(
-                    value: _TimeRange.ninetyDays,
-                    label: Text('90D'),
-                  ),
+                  ButtonSegment(value: _TimeRange.thirtyDays, label: Text('30D')),
+                  ButtonSegment(value: _TimeRange.ninetyDays, label: Text('90D')),
                   ButtonSegment(value: _TimeRange.all, label: Text('All')),
                 ],
                 selected: {_timeRange},
-                onSelectionChanged: (set) =>
-                    setState(() => _timeRange = set.first),
+                onSelectionChanged: (set) => setState(() => _timeRange = set.first),
                 style: const ButtonStyle(
                   visualDensity: VisualDensity.compact,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -352,21 +291,25 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
             ),
             error: (e, _) => Center(child: Text('Error: $e')),
             data: (observations) {
-              final filtered = _filterObservations(observations, _timeRange);
+              final filtered = _filterObservations(observations, _timeRange, _activeEngineTab);
 
               if (filtered.isEmpty) {
                 return Container(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceSecondary,
+                    color: isDark ? AppColors.darkCard : AppColors.surfaceSecondary,
                     borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                    border: Border.all(color: AppColors.borderSubtle),
+                    border: Border.all(
+                      color: isDark ? AppColors.darkBorderSubtle : AppColors.borderSubtle,
+                    ),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
-                      'No rank observations logged in this timeframe.\nTap "Sync Search Performance" on Overview or "Log SERP Rank" to record observations.',
+                      'No rank observations logged in this timeframe.\nTap "Sync Performance" on Overview or "Log SERP Rank" to record observations.',
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.bodySmall,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 );
@@ -376,21 +319,20 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: filtered.length,
-                separatorBuilder: (_, index) =>
-                    const SizedBox(height: AppSpacing.xs),
+                separatorBuilder: (_, index) => const SizedBox(height: AppSpacing.xs),
                 itemBuilder: (context, index) {
                   final obs = filtered[index];
-                  final formattedDate = DateFormat('MMM dd, yyyy • HH:mm')
-                      .format(obs.recordedAt);
+                  final formattedDate =
+                      DateFormat('MMM dd, yyyy • HH:mm').format(obs.recordedAt);
 
                   return Container(
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: AppColors.surfacePrimary,
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.cardRadius,
+                      color: isDark ? AppColors.darkCard : AppColors.surfacePrimary,
+                      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                      border: Border.all(
+                        color: isDark ? AppColors.darkBorderSubtle : AppColors.borderSubtle,
                       ),
-                      border: Border.all(color: AppColors.borderSubtle),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,23 +350,17 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                                 children: [
                                   Text(
                                     obs.searchEngine,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
+                                      color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
                                     ),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 1,
-                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                     decoration: BoxDecoration(
-                                      color: obs.source == 'gsc'
-                                          ? const Color(0xFFEFF6FF)
-                                          : (obs.source == 'bing_api'
-                                                ? const Color(0xFFF0FDF4)
-                                                : AppColors.surfaceSecondary),
+                                      color: isDark ? AppColors.darkSurfaceSecondary : const Color(0xFFEFF6FF),
                                       borderRadius: BorderRadius.circular(3),
                                     ),
                                     child: Text(
@@ -432,11 +368,7 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                                       style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
-                                        color: obs.source == 'gsc'
-                                            ? AppColors.accent
-                                            : (obs.source == 'bing_api'
-                                                  ? const Color(0xFF16A34A)
-                                                  : AppColors.textSecondary),
+                                        color: isDark ? const Color(0xFF60A5FA) : AppColors.accent,
                                       ),
                                     ),
                                   ),
@@ -444,30 +376,24 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                                     const SizedBox(width: 6),
                                     Text(
                                       'Avg: ${obs.averagePosition!.toStringAsFixed(1)}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
-                                        color: AppColors.textPrimary,
+                                        color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
                                       ),
                                     ),
                                   ],
                                   if (obs.isUrlChange) ...[
                                     const SizedBox(width: 6),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 5,
-                                        vertical: 1,
-                                      ),
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFFEF3C7),
                                         borderRadius: BorderRadius.circular(3),
                                       ),
                                       child: const Text(
                                         'URL Changed',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: Color(0xFF92400E),
-                                        ),
+                                        style: TextStyle(fontSize: 10, color: Color(0xFF92400E)),
                                       ),
                                     ),
                                   ],
@@ -479,18 +405,18 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                                   'Clicks: ${obs.clicks} • Impressions: ${obs.impressions}',
                                   style: AppTextStyles.bodySmall.copyWith(
                                     fontSize: 11,
+                                    color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                                   ),
                                 ),
                               ],
                               const SizedBox(height: 2),
-                              if (obs.rankingUrl != null &&
-                                  obs.rankingUrl!.isNotEmpty)
+                              if (obs.rankingUrl != null && obs.rankingUrl!.isNotEmpty)
                                 Text(
                                   obs.rankingUrl!,
                                   style: AppTextStyles.bodySmall.copyWith(
                                     fontFamily: 'monospace',
                                     fontSize: 11,
-                                    color: AppColors.textSecondary,
+                                    color: isDark ? AppColors.darkTextTertiary : AppColors.textSecondary,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -499,6 +425,7 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                                 formattedDate,
                                 style: AppTextStyles.bodySmall.copyWith(
                                   fontSize: 11,
+                                  color: isDark ? AppColors.darkTextTertiary : AppColors.textTertiary,
                                 ),
                               ),
                             ],
@@ -517,53 +444,452 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
     );
   }
 
-  Widget _buildPerformanceCard(Keyword kw) {
+  Widget _buildEngineTabBar(bool isDark) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _buildEngineTabPill(isDark, 'All Sources', 'All', Icons.apps),
+          const SizedBox(width: 6),
+          _buildEngineTabPill(isDark, 'Google (GSC)', 'Google', Icons.search),
+          const SizedBox(width: 6),
+          _buildEngineTabPill(isDark, 'Bing Webmaster', 'Bing', Icons.travel_explore),
+          const SizedBox(width: 6),
+          _buildEngineTabPill(isDark, 'Yandex', 'Yandex', Icons.travel_explore_outlined),
+          const SizedBox(width: 6),
+          _buildEngineTabPill(isDark, 'Manual SERP', 'Manual', Icons.rule),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEngineTabPill(bool isDark, String label, String value, IconData icon) {
+    final isSelected = _activeEngineTab == value;
+    final activeBg = isDark ? const Color(0xFF1E3A8A) : const Color(0xFFEFF6FF);
+    final inactiveBg = isDark ? AppColors.darkCard : AppColors.surfaceSecondary;
+    final activeBorder = isDark ? const Color(0xFF3B82F6) : AppColors.accent;
+    final inactiveBorder = isDark ? AppColors.darkBorderSubtle : AppColors.borderSubtle;
+    final activeTextColor = isDark ? Colors.white : AppColors.accent;
+
+    return InkWell(
+      onTap: () => setState(() => _activeEngineTab = value),
+      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? activeBg : inactiveBg,
+          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+          border: Border.all(
+            color: isSelected ? activeBorder : inactiveBorder,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? activeTextColor : (isDark ? AppColors.darkTextSecondary : AppColors.textSecondary),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? activeTextColor : (isDark ? AppColors.darkTextPrimary : AppColors.textPrimary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDisambiguationCard(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surfacePrimary,
+        color: isDark ? AppColors.darkSurfaceSecondary : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-        border: Border.all(color: AppColors.borderSubtle),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
+        ),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Search Engine Average Performance',
-            style: AppTextStyles.titleMedium,
+          Icon(
+            Icons.info_outline,
+            size: 18,
+            color: isDark ? AppColors.darkAccent : AppColors.accent,
           ),
-          const SizedBox(height: 8),
-
-          // Google Performance Row
-          _buildEngineDetailsRow(
-            engineName: 'Google Search Console',
-            icon: Icons.search,
-            brandColor: const Color(0xFF1D4ED8),
-            avgPos: kw.googleAveragePosition,
-            clicks: kw.googleClicks,
-            impressions: kw.googleImpressions,
-            rankingUrl: kw.googleRankingUrl,
-            syncedAt: kw.googleSyncedAt,
-          ),
-          const Divider(height: 16),
-
-          // Bing Performance Row
-          _buildEngineDetailsRow(
-            engineName: 'Bing Webmaster',
-            icon: Icons.travel_explore,
-            brandColor: const Color(0xFF0F766E),
-            avgPos: kw.bingAveragePosition,
-            clicks: kw.bingClicks,
-            impressions: kw.bingImpressions,
-            rankingUrl: kw.bingRankingUrl,
-            syncedAt: kw.bingSyncedAt,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Average Position vs Exact SERP Rank',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Webmaster tools (Google Search Console, Bing, Yandex) report Average Position calculated across thousands of real search impressions across varied devices and regions. Discrete SERP Audit reflects a single point-in-time check from your device.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildTrendChartSection(bool isDark, List<RankObservation> observations) {
+    // Filter observations for chart series
+    final filtered = _filterObservations(observations, _timeRange, _activeEngineTab);
+
+    // Group into series by engine
+    final Map<String, List<ChartDataPoint>> seriesData = {};
+    for (final obs in filtered) {
+      if (obs.position <= 0) continue;
+      final eng = obs.searchEngine;
+      final val = obs.averagePosition ?? obs.position.toDouble();
+      seriesData.putIfAbsent(eng, () => []).add(
+        ChartDataPoint(date: obs.recordedAt, value: val),
+      );
+    }
+
+    final colors = {
+      'Google': const Color(0xFF2563EB),
+      'Bing': const Color(0xFF0D9488),
+      'Yandex': const Color(0xFFEA580C),
+      'Manual': const Color(0xFF7C3AED),
+    };
+
+    final List<ChartSeries> chartSeries = [];
+    seriesData.forEach((eng, pts) {
+      pts.sort((a, b) => a.date.compareTo(b.date));
+      if (pts.length >= 2) {
+        chartSeries.add(
+          ChartSeries(
+            name: eng,
+            points: pts,
+            color: colors[eng] ?? const Color(0xFF64748B),
+          ),
+        );
+      }
+    });
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : AppColors.surfacePrimary,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.borderSubtle,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Position Movement Trend',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                _timeRangeLabel,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: isDark ? AppColors.darkTextTertiary : AppColors.textTertiary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TrendLineChart(
+            series: chartSeries,
+            height: 170,
+            invertYAxis: true,
+            yAxisSuffix: ' pos',
+            emptyMessage:
+                'Insufficient data points in this timeframe to render trend line.\nObservations will appear after running Search Performance Sync.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUrlChangeHistorySection(
+    bool isDark,
+    Keyword keyword,
+    List<RankObservation> observations,
+  ) {
+    // Extract unique ranking URLs over time
+    final urlChanges = observations
+        .where((o) => o.rankingUrl != null && o.rankingUrl!.isNotEmpty)
+        .toList();
+
+    final Set<String> distinctUrls = {};
+    final List<RankObservation> changes = [];
+    for (final obs in urlChanges) {
+      if (!distinctUrls.contains(obs.rankingUrl)) {
+        distinctUrls.add(obs.rankingUrl!);
+        changes.add(obs);
+      }
+    }
+
+    if (changes.length < 2) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : AppColors.surfacePrimary,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.borderSubtle,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.history, size: 16, color: Color(0xFF7C3AED)),
+              const SizedBox(width: 6),
+              Text(
+                'Observed URL Change History (${distinctUrls.length} Pages)',
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Search engines observed multiple distinct URLs receiving impressions for this query.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: isDark ? AppColors.darkTextTertiary : AppColors.textTertiary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...changes.map((obs) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.subdirectory_arrow_right,
+                    size: 14,
+                    color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          obs.rankingUrl!,
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${obs.searchEngine} • First observed ${DateFormat('MMM d, yyyy').format(obs.recordedAt)} • Position #${obs.position}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? AppColors.darkTextTertiary : AppColors.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCannibalizationBanner(bool isDark, Keyword keyword) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF450A0A) : const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(
+          color: isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFECACA),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: AppColors.rankDrop,
+                size: 20,
+              ),
+              SizedBox(width: 6),
+              Text(
+                'Potential Cannibalization Alert',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.rankDrop,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            keyword.cannibalizationStatus == 'url_switching'
+                ? 'Frequent URL switching detected: search engines are oscillating between multiple URLs for this query.'
+                : 'Multiple distinct URLs were observed ranking for this query across observation checks.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFF7F1D1D),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerformanceCard(bool isDark, Keyword kw) {
+    final showGoogle = _activeEngineTab == 'All' || _activeEngineTab == 'Google';
+    final showBing = _activeEngineTab == 'All' || _activeEngineTab == 'Bing';
+    final showYandex = _activeEngineTab == 'All' || _activeEngineTab == 'Yandex';
+    final showManual = _activeEngineTab == 'All' || _activeEngineTab == 'Manual';
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : AppColors.surfacePrimary,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.borderSubtle,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Search Engine Average Performance',
+            style: AppTextStyles.titleMedium.copyWith(
+              color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Google Performance Row
+          if (showGoogle) ...[
+            _buildEngineDetailsRow(
+              isDark: isDark,
+              engineName: 'Google Search Console',
+              icon: Icons.search,
+              brandColor: const Color(0xFF1D4ED8),
+              avgPos: kw.googleAveragePosition,
+              clicks: kw.googleClicks,
+              impressions: kw.googleImpressions,
+              rankingUrl: kw.googleRankingUrl,
+              syncedAt: kw.googleSyncedAt,
+            ),
+          ],
+
+          if (showGoogle && showBing) const Divider(height: 16),
+
+          // Bing Performance Row
+          if (showBing) ...[
+            _buildEngineDetailsRow(
+              isDark: isDark,
+              engineName: 'Bing Webmaster',
+              icon: Icons.travel_explore,
+              brandColor: const Color(0xFF0F766E),
+              avgPos: kw.bingAveragePosition,
+              clicks: kw.bingClicks,
+              impressions: kw.bingImpressions,
+              rankingUrl: kw.bingRankingUrl,
+              syncedAt: kw.bingSyncedAt,
+            ),
+          ],
+
+          if ((showGoogle || showBing) && showYandex) const Divider(height: 16),
+
+          // Yandex Performance Row
+          if (showYandex) ...[
+            _buildEngineDetailsRow(
+              isDark: isDark,
+              engineName: 'Yandex Webmaster',
+              icon: Icons.travel_explore_outlined,
+              brandColor: const Color(0xFFEA580C),
+              avgPos: kw.yandexAveragePosition,
+              clicks: kw.yandexClicks,
+              impressions: kw.yandexImpressions,
+              rankingUrl: kw.yandexRankingUrl,
+              syncedAt: kw.yandexSyncedAt,
+            ),
+          ],
+
+          if (showManual) ...[
+            const Divider(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.rule, size: 18, color: Color(0xFF7C3AED)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Manual SERP Audit Ranks',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF7C3AED),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Google #${kw.googlePosition ?? "—"} • Bing #${kw.bingPosition ?? "—"} • Yandex #${kw.yandexPosition ?? "—"}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildEngineDetailsRow({
+    required bool isDark,
     required String engineName,
     required IconData icon,
     required Color brandColor,
@@ -596,15 +922,17 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
               if (hasData) ...[
                 Text(
                   'Average Position: ${avgPos.toStringAsFixed(1)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
                   ),
                 ),
                 Text(
                   'Clicks: $clicks • Impressions: $impressions',
-                  style: AppTextStyles.bodySmall,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                  ),
                 ),
                 if (rankingUrl != null && rankingUrl.isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -613,7 +941,7 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                     style: AppTextStyles.bodySmall.copyWith(
                       fontFamily: 'monospace',
                       fontSize: 10.5,
-                      color: AppColors.textSecondary,
+                      color: isDark ? AppColors.darkTextTertiary : AppColors.textSecondary,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -622,19 +950,19 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                   const SizedBox(height: 2),
                   Text(
                     'Last synced: ${DateFormatter.relativeTime(syncedAt)}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10,
-                      color: AppColors.textTertiary,
+                      color: isDark ? AppColors.darkTextTertiary : AppColors.textTertiary,
                     ),
                   ),
                 ],
               ] else ...[
-                const Text(
+                Text(
                   'No search performance data recorded yet.',
                   style: TextStyle(
                     fontSize: 11,
                     fontStyle: FontStyle.italic,
-                    color: AppColors.textSecondary,
+                    color: isDark ? AppColors.darkTextTertiary : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -645,31 +973,35 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
     );
   }
 
-  Widget _buildLandingPagesSection(BuildContext context, Keyword keyword) {
-    final bestUrl =
-        keyword.googleRankingUrl ??
+  Widget _buildLandingPagesSection(BuildContext context, bool isDark, Keyword keyword) {
+    final bestUrl = keyword.googleRankingUrl ??
         keyword.bingRankingUrl ??
+        keyword.yandexRankingUrl ??
         keyword.rankingUrl;
     final isMatch = UrlValidator.urlsMatch(keyword.targetUrl, bestUrl);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surfacePrimary,
+        color: isDark ? AppColors.darkCard : AppColors.surfacePrimary,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-        border: Border.all(color: AppColors.borderSubtle),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.borderSubtle,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.link, size: 18, color: AppColors.accent),
+              Icon(Icons.link, size: 18, color: isDark ? AppColors.darkAccent : AppColors.accent),
               const SizedBox(width: 6),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Landing Pages & Target Matching',
-                  style: AppTextStyles.labelLarge,
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -697,87 +1029,90 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Target URL: ',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              Text(
+                '🎯 Target: ',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                ),
               ),
               Expanded(
                 child: Text(
-                  keyword.targetUrl ?? 'Not specified',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    fontFamily: 'monospace',
+                  keyword.targetUrl != null && keyword.targetUrl!.isNotEmpty
+                      ? keyword.targetUrl!
+                      : 'None set (optional)',
+                  style: TextStyle(
                     fontSize: 11,
-                    color: keyword.targetUrl != null
-                        ? AppColors.accent
-                        : AppColors.textSecondary,
+                    fontFamily: keyword.targetUrl != null ? 'monospace' : null,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 6),
 
-          // Detected Ranking URL
+          // Observed Ranking Page
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Observed URL: ',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              Text(
+                '🌐 Observed: ',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                ),
               ),
               Expanded(
                 child: Text(
-                  bestUrl ?? 'No landing page detected in search analytics yet',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    fontFamily: 'monospace',
+                  bestUrl ?? 'No landing page captured yet',
+                  style: TextStyle(
                     fontSize: 11,
-                    color: bestUrl != null
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
+                    fontFamily: bestUrl != null ? 'monospace' : null,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 8),
 
-          if (keyword.targetUrl != null &&
-              keyword.targetUrl!.isNotEmpty &&
-              bestUrl != null &&
-              bestUrl.isNotEmpty) ...[
-            const SizedBox(height: 8),
+          // Target Match Badge
+          if (keyword.targetUrl != null && bestUrl != null) ...[
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: isMatch
-                    ? const Color(0xFFF0FDF4)
-                    : const Color(0xFFFFFBEB),
+                    ? (isDark ? const Color(0xFF052E16) : const Color(0xFFF0FDF4))
+                    : (isDark ? const Color(0xFF451A03) : const Color(0xFFFFFBEB)),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color: isMatch
-                      ? const Color(0xFFBBF7D0)
-                      : const Color(0xFFFDE68A),
+                      ? (isDark ? const Color(0xFF166534) : const Color(0xFFBBF7D0))
+                      : (isDark ? const Color(0xFF78350F) : const Color(0xFFFDE68A)),
                 ),
               ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     isMatch ? Icons.check_circle : Icons.warning_amber_rounded,
-                    size: 14,
-                    color: isMatch
-                        ? const Color(0xFF16A34A)
-                        : const Color(0xFFB45309),
+                    size: 13,
+                    color: isMatch ? const Color(0xFF16A34A) : const Color(0xFFB45309),
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      isMatch ? 'Observed ranking page matches target URL' : 'Different page ranking: search visibility is landing on a different page than intended',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: isMatch
-                            ? const Color(0xFF16A34A)
-                            : const Color(0xFFB45309),
-                      ),
+                  const SizedBox(width: 4),
+                  Text(
+                    isMatch
+                        ? 'Search Visibility Matches Expected Target Page'
+                        : 'Different Page Ranking than Target URL',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isMatch ? const Color(0xFF16A34A) : const Color(0xFFB45309),
                     ),
                   ),
                 ],
@@ -790,27 +1125,51 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
   }
 
   List<RankObservation> _filterObservations(
-    List<RankObservation> list,
+    List<RankObservation> observations,
     _TimeRange range,
+    String engine,
   ) {
-    if (range == _TimeRange.all) return list;
     final now = DateTime.now();
-    final int days;
+    DateTime cutoff;
+
     switch (range) {
       case _TimeRange.sevenDays:
-        days = 7;
+        cutoff = now.subtract(const Duration(days: 7));
         break;
       case _TimeRange.thirtyDays:
-        days = 30;
+        cutoff = now.subtract(const Duration(days: 30));
         break;
       case _TimeRange.ninetyDays:
-        days = 90;
+        cutoff = now.subtract(const Duration(days: 90));
         break;
       case _TimeRange.all:
-        return list;
+        cutoff = DateTime(1970);
+        break;
     }
-    final cutoff = now.subtract(Duration(days: days));
-    return list.where((o) => o.recordedAt.isAfter(cutoff)).toList();
+
+    return observations.where((o) {
+      if (o.recordedAt.isBefore(cutoff)) return false;
+      if (engine != 'All') {
+        if (engine == 'Manual') {
+          return o.source == 'manual';
+        }
+        return o.searchEngine.toLowerCase() == engine.toLowerCase();
+      }
+      return true;
+    }).toList();
+  }
+
+  String get _timeRangeLabel {
+    switch (_timeRange) {
+      case _TimeRange.sevenDays:
+        return 'Last 7 Days';
+      case _TimeRange.thirtyDays:
+        return 'Last 30 Days';
+      case _TimeRange.ninetyDays:
+        return 'Last 90 Days';
+      case _TimeRange.all:
+        return 'All Time';
+    }
   }
 }
 
@@ -823,92 +1182,20 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.bold,
           color: color,
         ),
       ),
-    );
-  }
-}
-
-class _EnginePositionTile extends StatelessWidget {
-  final String engineName;
-  final int? position;
-  final int delta;
-  final int? previousPos;
-  final IconData icon;
-
-  const _EnginePositionTile({
-    required this.engineName,
-    required this.position,
-    required this.delta,
-    required this.previousPos,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    String posText = '—';
-    if (position != null) {
-      posText = position == 0 ? 'Not Ranking (0)' : '#$position';
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 16, color: AppColors.textSecondary),
-            const SizedBox(width: 4),
-            Text(engineName, style: AppTextStyles.labelMedium),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          posText,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 2),
-        if (delta != 0)
-          Row(
-            children: [
-              Icon(
-                delta > 0 ? Icons.arrow_drop_up : Icons.arrow_drop_down,
-                size: 16,
-                color: delta > 0 ? AppColors.rankGain : AppColors.rankDrop,
-              ),
-              Text(
-                '${delta > 0 ? "+$delta" : delta} (was ${previousPos ?? "—"})',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: delta > 0 ? AppColors.rankGain : AppColors.rankDrop,
-                ),
-              ),
-            ],
-          )
-        else
-          Text(
-            previousPos != null
-                ? 'Unchanged (was #$previousPos)'
-                : 'No movement record',
-            style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
-          ),
-      ],
     );
   }
 }

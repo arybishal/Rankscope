@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rankscope/core/constants/database_constants.dart';
 import 'package:rankscope/core/database/app_database.dart';
 import 'package:rankscope/core/utils/url_validator.dart';
+import 'package:rankscope/features/dashboard/presentation/controllers/dashboard_trend_controller.dart';
 import 'package:rankscope/features/dashboard/presentation/views/dashboard_view.dart';
 import 'package:rankscope/features/keywords/data/datasources/local_keywords_datasource.dart';
 import 'package:rankscope/features/keywords/data/repositories/keywords_repository_impl.dart';
@@ -369,6 +370,8 @@ void main() {
                 (ref) => Future.value(true),
               ),
               bingConfiguredProvider.overrideWith((ref) => Future.value(true)),
+              yandexConfiguredProvider.overrideWith((ref) => Future.value(false)),
+              dashboardTrendProvider.overrideWith((ref, args) => Future.value([])),
             ],
             child: const MaterialApp(home: DashboardView()),
           ),

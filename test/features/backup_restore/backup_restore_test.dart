@@ -191,5 +191,90 @@ void main() {
         }
       },
     );
+
+    test(
+      '2. Credential Inclusion Toggle & Yandex Search Analytics Ingestion in Backups',
+      () async {
+        final tempDir = Directory.systemTemp.createTempSync(
+          'rankscope_backup_creds_test_',
+        );
+        final dbPath = '${tempDir.path}/creds_test.db';
+
+        try {
+          await AppDatabase.instance.initCustom(dbPath);
+          final websitesDs = LocalWebsitesDatasource();
+          final backupService = BackupRestoreService();
+          final db = await AppDatabase.instance.database;
+
+          final now = DateTime.now();
+          final site = await websitesDs.insertWebsite(
+            WebsiteModel(
+              domain: 'yandex-test.com',
+              label: 'Yandex Test',
+              yandexHostId: 'https:yandex-test.com:443',
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+
+          // Insert Yandex Analytics Record
+          await db.insert('yandex_search_analytics', {
+            'website_id': site.id!,
+            'query': 'yandex search query',
+            'metric_date': '2026-10-31',
+            'clicks': 42,
+            'impressions': 1000,
+            'ctr': 0.042,
+            'average_position': 3.4,
+            'synced_at': now.millisecondsSinceEpoch,
+          });
+
+          const pwd = 'CredPassword2026!';
+
+          // Export with includeCredentials: false
+          final backupNoCreds = await backupService.exportEncryptedBackup(
+            password: pwd,
+            includeCredentials: false,
+            destinationDirPath: tempDir.path,
+          );
+          final previewNoCreds = await backupService.inspectAndDecryptBackup(
+            filePath: backupNoCreds.path,
+            password: pwd,
+          );
+          expect(previewNoCreds['integrations_count'], 0);
+          expect(previewNoCreds['ranking_records_count'], 1); // 1 yandex record
+
+          // Export with includeCredentials: true
+          final backupWithCreds = await backupService.exportEncryptedBackup(
+            password: pwd,
+            includeCredentials: true,
+            destinationDirPath: tempDir.path,
+          );
+          final previewWithCreds = await backupService.inspectAndDecryptBackup(
+            filePath: backupWithCreds.path,
+            password: pwd,
+          );
+          expect(previewWithCreds['ranking_records_count'], 1);
+
+          // Clear database and perform Full Restore
+          await db.delete('yandex_search_analytics');
+          await db.delete('websites');
+
+          await backupService.performFullRestore(
+            previewWithCreds['payload'] as Map<String, dynamic>,
+          );
+
+          final restoredYandex = await db.query('yandex_search_analytics');
+          expect(restoredYandex.length, 1);
+          expect(restoredYandex.first['query'], 'yandex search query');
+          expect(restoredYandex.first['clicks'], 42);
+        } finally {
+          await AppDatabase.instance.close();
+          if (tempDir.existsSync()) {
+            tempDir.deleteSync(recursive: true);
+          }
+        }
+      },
+    );
   });
 }

@@ -6,6 +6,7 @@ class Website {
   final bool isCompetitor;
   final String? gscPropertyId;
   final String? bingSiteUrl;
+  final String? yandexHostId;
   final String? faviconUrl;
   final String? notes;
   final DateTime createdAt;
@@ -18,6 +19,7 @@ class Website {
     this.isCompetitor = false,
     this.gscPropertyId,
     this.bingSiteUrl,
+    this.yandexHostId,
     this.faviconUrl,
     this.notes,
     required this.createdAt,
@@ -32,6 +34,7 @@ class Website {
       isCompetitor: (map['is_competitor'] as int? ?? 0) == 1,
       gscPropertyId: map['gsc_property_id'] as String?,
       bingSiteUrl: map['bing_site_url'] as String?,
+      yandexHostId: map['yandex_host_id'] as String?,
       faviconUrl: map['favicon_url'] as String?,
       notes: map['notes'] as String?,
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
@@ -49,6 +52,7 @@ class Website {
       'is_competitor': isCompetitor ? 1 : 0,
       'gsc_property_id': gscPropertyId,
       'bing_site_url': bingSiteUrl,
+      'yandex_host_id': yandexHostId,
       'favicon_url': faviconUrl,
       'notes': notes,
       'created_at': createdAt.millisecondsSinceEpoch,
@@ -63,6 +67,7 @@ class Website {
     bool? isCompetitor,
     String? gscPropertyId,
     String? bingSiteUrl,
+    String? yandexHostId,
     String? faviconUrl,
     String? notes,
     DateTime? createdAt,
@@ -75,6 +80,7 @@ class Website {
       isCompetitor: isCompetitor ?? this.isCompetitor,
       gscPropertyId: gscPropertyId ?? this.gscPropertyId,
       bingSiteUrl: bingSiteUrl ?? this.bingSiteUrl,
+      yandexHostId: yandexHostId ?? this.yandexHostId,
       faviconUrl: faviconUrl ?? this.faviconUrl,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,

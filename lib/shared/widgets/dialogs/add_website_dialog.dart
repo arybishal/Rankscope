@@ -23,7 +23,11 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
   late final TextEditingController _domainController;
   late final TextEditingController _labelController;
   late final TextEditingController _notesController;
+  late final TextEditingController _gscPropertyController;
+  late final TextEditingController _bingSiteUrlController;
+  late final TextEditingController _yandexHostIdController;
   late bool _isCompetitor;
+  bool _showAdvanced = false;
   bool _isSubmitting = false;
 
   bool get _isEditing => widget.initialWebsite != null;
@@ -40,7 +44,19 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
     _notesController = TextEditingController(
       text: widget.initialWebsite?.notes ?? '',
     );
+    _gscPropertyController = TextEditingController(
+      text: widget.initialWebsite?.gscPropertyId ?? '',
+    );
+    _bingSiteUrlController = TextEditingController(
+      text: widget.initialWebsite?.bingSiteUrl ?? '',
+    );
+    _yandexHostIdController = TextEditingController(
+      text: widget.initialWebsite?.yandexHostId ?? '',
+    );
     _isCompetitor = widget.initialWebsite?.isCompetitor ?? false;
+    _showAdvanced = widget.initialWebsite?.gscPropertyId != null ||
+        widget.initialWebsite?.bingSiteUrl != null ||
+        widget.initialWebsite?.yandexHostId != null;
   }
 
   @override
@@ -48,6 +64,9 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
     _domainController.dispose();
     _labelController.dispose();
     _notesController.dispose();
+    _gscPropertyController.dispose();
+    _bingSiteUrlController.dispose();
+    _yandexHostIdController.dispose();
     super.dispose();
   }
 
@@ -64,6 +83,15 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
     final notes = _notesController.text.trim().isEmpty
         ? null
         : _notesController.text.trim();
+    final gscPropertyId = _gscPropertyController.text.trim().isEmpty
+        ? null
+        : _gscPropertyController.text.trim();
+    final bingSiteUrl = _bingSiteUrlController.text.trim().isEmpty
+        ? null
+        : _bingSiteUrlController.text.trim();
+    final yandexHostId = _yandexHostIdController.text.trim().isEmpty
+        ? null
+        : _yandexHostIdController.text.trim();
 
     try {
       if (_isEditing) {
@@ -72,6 +100,9 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
           label: label,
           isCompetitor: _isCompetitor,
           notes: notes,
+          gscPropertyId: gscPropertyId,
+          bingSiteUrl: bingSiteUrl,
+          yandexHostId: yandexHostId,
         );
         await ref.read(websitesProvider.notifier).updateWebsite(updated);
 
@@ -90,6 +121,9 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
               label: label,
               isCompetitor: _isCompetitor,
               notes: notes,
+              gscPropertyId: gscPropertyId,
+              bingSiteUrl: bingSiteUrl,
+              yandexHostId: yandexHostId,
             );
 
         if (mounted) {
@@ -115,12 +149,16 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Dialog(
-      backgroundColor: AppColors.surfacePrimary,
+      backgroundColor: isDark ? AppColors.darkCard : AppColors.surfacePrimary,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-        side: const BorderSide(color: AppColors.borderSubtle),
+        side: BorderSide(
+          color: isDark ? AppColors.darkBorder : AppColors.borderSubtle,
+        ),
       ),
       child: SingleChildScrollView(
         child: Padding(
@@ -137,7 +175,9 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  _isEditing ? 'Update website details, labels, or notes.' : 'Track your primary domain or monitor competitor search rankings.',
+                  _isEditing
+                      ? 'Update website details, labels, notes, or verified search engine properties.'
+                      : 'Track your primary domain or monitor competitor search rankings.',
                   style: AppTextStyles.bodySmall,
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -182,6 +222,55 @@ class _AddWebsiteDialogState extends ConsumerState<AddWebsiteDialog> {
                     ),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                InkWell(
+                  onTap: () => setState(() => _showAdvanced = !_showAdvanced),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _showAdvanced
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
+                          size: 18,
+                          color: AppColors.accent,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _showAdvanced
+                              ? 'Hide Verified Properties'
+                              : 'Advanced Verified Properties (Optional)',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_showAdvanced) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  AppTextField(
+                    controller: _gscPropertyController,
+                    label: 'Google Search Console Property ID',
+                    hintText: 'e.g. sc-domain:example.com or https://example.com/',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppTextField(
+                    controller: _bingSiteUrlController,
+                    label: 'Bing Webmaster Site URL',
+                    hintText: 'e.g. https://example.com/',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppTextField(
+                    controller: _yandexHostIdController,
+                    label: 'Yandex Webmaster Host ID',
+                    hintText: 'e.g. https:example.com:443',
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 AppPrimaryButton(
                   label: _isSubmitting

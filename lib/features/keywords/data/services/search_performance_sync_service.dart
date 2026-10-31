@@ -9,49 +9,60 @@ import '../../../bing_webmaster/data/repositories/bing_repository_impl.dart';
 import '../../../bing_webmaster/domain/repositories/bing_repository.dart';
 import '../../../search_console/data/repositories/gsc_repository_impl.dart';
 import '../../../search_console/domain/repositories/gsc_repository.dart';
+import '../../../yandex_webmaster/data/repositories/yandex_repository_impl.dart';
+import '../../../yandex_webmaster/domain/repositories/yandex_repository.dart';
 import '../../domain/entities/keyword.dart';
 import '../../domain/entities/rank_observation.dart';
 
-/// Status of Search Performance Synchronization for Google and Bing.
+/// Status of Search Performance Synchronization for Google, Bing, and Yandex.
 class SearchSyncResult {
   final int totalKeywords;
   final int matchedKeywords;
   final int googleQueriesAvailable;
   final int bingQueriesAvailable;
+  final int yandexQueriesAvailable;
   final bool googleConnected;
   final bool bingConnected;
+  final bool yandexConnected;
   final String? googleStatusMessage;
   final String? bingStatusMessage;
+  final String? yandexStatusMessage;
 
   const SearchSyncResult({
     required this.totalKeywords,
     required this.matchedKeywords,
     required this.googleQueriesAvailable,
     required this.bingQueriesAvailable,
+    this.yandexQueriesAvailable = 0,
     required this.googleConnected,
     required this.bingConnected,
+    this.yandexConnected = false,
     this.googleStatusMessage,
     this.bingStatusMessage,
+    this.yandexStatusMessage,
   });
 }
 
-/// Service that correlates Google Search Console & Bing Webmaster data with
-/// tracked keywords, evaluates Target URL matching, records historical
+/// Service that correlates Google Search Console, Bing Webmaster & Yandex Webmaster
+/// data with tracked keywords, evaluates Target URL matching, records historical
 /// observations, and updates SQLite tables.
 class SearchPerformanceSyncService {
   final AppDatabase _dbManager;
   final GscRepository _gscRepository;
   final BingRepository _bingRepository;
+  final YandexRepository _yandexRepository;
   final SecureStorageService _secureStorage;
 
   SearchPerformanceSyncService({
     AppDatabase? dbManager,
     GscRepository? gscRepository,
     BingRepository? bingRepository,
+    YandexRepository? yandexRepository,
     SecureStorageService? secureStorage,
   }) : _dbManager = dbManager ?? AppDatabase.instance,
        _gscRepository = gscRepository ?? GscRepositoryImpl(),
        _bingRepository = bingRepository ?? BingRepositoryImpl(),
+       _yandexRepository = yandexRepository ?? YandexRepositoryImpl(),
        _secureStorage = secureStorage ?? SecureStorageService();
 
   /// Checks if Google Search Console is connected / has credentials.
@@ -76,18 +87,50 @@ class SearchPerformanceSyncService {
     }
   }
 
+  /// Checks if Yandex Webmaster is configured.
+  Future<bool> isYandexConfigured() async {
+    try {
+      final token = await _secureStorage.getYandexOAuthToken();
+      return token != null && token.trim().isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Synchronizes search engine performance data for the given website and
   /// correlates all saved keywords.
   Future<SearchSyncResult> syncPerformanceForWebsite({
     required int websiteId,
     required String domain,
+    String? gscPropertyId,
+    String? bingSiteUrl,
+    String? yandexHostId,
   }) async {
     final db = await _dbManager.database;
 
+    // Lookup website record to ensure we use exact verified properties
+    final siteRows = await db.query(
+      DatabaseConstants.tableWebsites,
+      where: 'id = ?',
+      whereArgs: [websiteId],
+      limit: 1,
+    );
+    String? effectiveGscProp = gscPropertyId;
+    String? effectiveBingProp = bingSiteUrl;
+    String? effectiveYandexProp = yandexHostId;
+    if (siteRows.isNotEmpty) {
+      final s = siteRows.first;
+      effectiveGscProp ??= s['gsc_property_id'] as String?;
+      effectiveBingProp ??= s['bing_site_url'] as String?;
+      effectiveYandexProp ??= s['yandex_host_id'] as String?;
+    }
+
     bool googleConnected = await isGoogleConfigured();
     bool bingConnected = await isBingConfigured();
+    bool yandexConnected = await isYandexConfigured();
     String? googleStatus;
     String? bingStatus;
+    String? yandexStatus;
 
     // 1. Attempt remote fetch for Google Search Console if configured
     if (googleConnected) {
@@ -99,9 +142,13 @@ class SearchPerformanceSyncService {
         final startDate =
             "${startDate30.year}-${startDate30.month.toString().padLeft(2, '0')}-${startDate30.day.toString().padLeft(2, '0')}";
 
+        final siteUrl = (effectiveGscProp != null && effectiveGscProp.isNotEmpty)
+            ? effectiveGscProp
+            : (domain.startsWith('http') ? domain : 'https://$domain/');
+
         final gscCount = await _gscRepository.syncMetricsFromApi(
           websiteId: websiteId,
-          siteUrl: domain.startsWith('http') ? domain : 'https://$domain/',
+          siteUrl: siteUrl,
           startDate: startDate,
           endDate: endDate,
         );
@@ -121,9 +168,13 @@ class SearchPerformanceSyncService {
     // 2. Attempt remote fetch for Bing Webmaster if configured
     if (bingConnected) {
       try {
+        final siteUrl = (effectiveBingProp != null && effectiveBingProp.isNotEmpty)
+            ? effectiveBingProp
+            : domain;
+
         final bingCount = await _bingRepository.syncMetricsFromApi(
           websiteId: websiteId,
-          siteUrl: domain,
+          siteUrl: siteUrl,
         );
         bingStatus = 'Synced $bingCount Bing queries';
       } catch (e) {
@@ -138,7 +189,61 @@ class SearchPerformanceSyncService {
       bingStatus = 'Bing Webmaster API key not configured';
     }
 
-    // 3. Load all cached GSC search analytics for this website
+    // 3. Attempt remote fetch for Yandex Webmaster if configured
+    if (yandexConnected) {
+      try {
+        // If yandex host not yet mapped, attempt discovery
+        if (effectiveYandexProp == null || effectiveYandexProp.isEmpty) {
+          try {
+            final hosts = await _yandexRepository.getUserHosts();
+            final matching = hosts.where((h) {
+              final d = h.displayName.toLowerCase();
+              final dom = domain.toLowerCase();
+              return d.contains(dom) || dom.contains(d);
+            }).toList();
+            if (matching.isNotEmpty) {
+              effectiveYandexProp = matching.first.hostId;
+              await db.update(
+                DatabaseConstants.tableWebsites,
+                {'yandex_host_id': effectiveYandexProp},
+                where: 'id = ?',
+                whereArgs: [websiteId],
+              );
+            }
+          } catch (_) {}
+        }
+
+        if (effectiveYandexProp != null && effectiveYandexProp.isNotEmpty) {
+          final now = DateTime.now();
+          final endDate =
+              "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+          final startDate30 = now.subtract(const Duration(days: 30));
+          final startDate =
+              "${startDate30.year}-${startDate30.month.toString().padLeft(2, '0')}-${startDate30.day.toString().padLeft(2, '0')}";
+
+          final yCount = await _yandexRepository.syncMetricsFromApi(
+            websiteId: websiteId,
+            hostId: effectiveYandexProp,
+            startDate: startDate,
+            endDate: endDate,
+          );
+          yandexStatus = 'Synced $yCount Yandex queries';
+        } else {
+          yandexStatus = 'No matching verified Yandex host mapped';
+        }
+      } catch (e) {
+        yandexStatus = 'Yandex sync: $e';
+        await AppLogger.instance.warning(
+          'SearchPerformanceSync',
+          'yandex_sync_failed',
+          '$e',
+        );
+      }
+    } else {
+      yandexStatus = 'Yandex Webmaster not connected';
+    }
+
+    // 4. Load all cached search analytics for this website
     final gscRows = await db.query(
       DatabaseConstants.tableGscSearchAnalytics,
       where: 'website_id = ?',
@@ -146,9 +251,15 @@ class SearchPerformanceSyncService {
       orderBy: 'metric_date DESC, clicks DESC, impressions DESC',
     );
 
-    // 4. Load all cached Bing search analytics for this website
     final bingRows = await db.query(
       DatabaseConstants.tableBingSearchAnalytics,
+      where: 'website_id = ?',
+      whereArgs: [websiteId],
+      orderBy: 'metric_date DESC, clicks DESC, impressions DESC',
+    );
+
+    final yandexRows = await db.query(
+      DatabaseConstants.tableYandexSearchAnalytics,
       where: 'website_id = ?',
       whereArgs: [websiteId],
       orderBy: 'metric_date DESC, clicks DESC, impressions DESC',
@@ -160,6 +271,9 @@ class SearchPerformanceSyncService {
     }
     if (bingRows.isNotEmpty && !bingConnected) {
       bingStatus = 'Using local Bing cached data (${bingRows.length} rows)';
+    }
+    if (yandexRows.isNotEmpty && !yandexConnected) {
+      yandexStatus = 'Using local Yandex cached data (${yandexRows.length} rows)';
     }
 
     // 5. Query all saved keywords for this website
@@ -175,20 +289,30 @@ class SearchPerformanceSyncService {
 
     for (final kw in keywords) {
       final normalizedKw = kw.keywordText.trim().toLowerCase();
+      final kwClean = normalizedKw.replaceAll(RegExp(r'[^\w\s]'), '').trim();
 
       // Find matching GSC metrics for this keyword
       final matchingGsc = gscRows.where((r) {
         final q = (r['query'] as String? ?? '').trim().toLowerCase();
-        return q == normalizedKw;
+        final qClean = q.replaceAll(RegExp(r'[^\w\s]'), '').trim();
+        return q == normalizedKw || (kwClean.isNotEmpty && qClean == kwClean);
       }).toList();
 
       // Find matching Bing metrics for this keyword
       final matchingBing = bingRows.where((r) {
         final q = (r['query'] as String? ?? '').trim().toLowerCase();
-        return q == normalizedKw;
+        final qClean = q.replaceAll(RegExp(r'[^\w\s]'), '').trim();
+        return q == normalizedKw || (kwClean.isNotEmpty && qClean == kwClean);
       }).toList();
 
-      if (matchingGsc.isEmpty && matchingBing.isEmpty) {
+      // Find matching Yandex metrics for this keyword
+      final matchingYandex = yandexRows.where((r) {
+        final q = (r['query'] as String? ?? '').trim().toLowerCase();
+        final qClean = q.replaceAll(RegExp(r'[^\w\s]'), '').trim();
+        return q == normalizedKw || (kwClean.isNotEmpty && qClean == kwClean);
+      }).toList();
+
+      if (matchingGsc.isEmpty && matchingBing.isEmpty && matchingYandex.isEmpty) {
         continue;
       }
 
@@ -203,7 +327,6 @@ class SearchPerformanceSyncService {
       DateTime? googleSyncedAt;
 
       if (matchingGsc.isNotEmpty) {
-        // Pick best row (most recent with highest impressions)
         final bestGsc = matchingGsc.first;
         googleAvgPos = (bestGsc['average_position'] as num?)?.toDouble();
         googleRankingUrl = bestGsc['page_url'] as String?;
@@ -211,7 +334,6 @@ class SearchPerformanceSyncService {
             ? DateTime.fromMillisecondsSinceEpoch(bestGsc['synced_at'] as int)
             : now;
 
-        // Sum clicks and impressions across all dates for this query
         for (final row in matchingGsc) {
           googleClicks += (row['clicks'] as int? ?? 0);
           googleImpressions += (row['impressions'] as int? ?? 0);
@@ -246,9 +368,34 @@ class SearchPerformanceSyncService {
         }
       }
 
+      // Aggregate Yandex metrics
+      double? yandexAvgPos;
+      String? yandexRankingUrl;
+      int yandexImpressions = 0;
+      int yandexClicks = 0;
+      double yandexCtr = 0.0;
+      DateTime? yandexSyncedAt;
+
+      if (matchingYandex.isNotEmpty) {
+        final bestYandex = matchingYandex.first;
+        yandexAvgPos = (bestYandex['average_position'] as num?)?.toDouble();
+        yandexRankingUrl = bestYandex['page_url'] as String?;
+        yandexSyncedAt = bestYandex['synced_at'] != null
+            ? DateTime.fromMillisecondsSinceEpoch(bestYandex['synced_at'] as int)
+            : now;
+
+        for (final row in matchingYandex) {
+          yandexClicks += (row['clicks'] as int? ?? 0);
+          yandexImpressions += (row['impressions'] as int? ?? 0);
+        }
+        if (yandexImpressions > 0) {
+          yandexCtr = yandexClicks / yandexImpressions;
+        }
+      }
+
       // Determine best observed ranking URL
       final bestRankingUrl =
-          googleRankingUrl ?? bingRankingUrl ?? kw.rankingUrl;
+          googleRankingUrl ?? bingRankingUrl ?? yandexRankingUrl ?? kw.rankingUrl;
 
       // Evaluate Target URL match status
       final matchStatus = UrlValidator.computeUrlMatchStatus(
@@ -292,6 +439,24 @@ class SearchPerformanceSyncService {
         );
       }
 
+      // Record Yandex Observation in rank_observations if Yandex data is present
+      if (yandexAvgPos != null && yandexAvgPos > 0) {
+        await _recordSearchObservationIfNotExists(
+          db: db,
+          keywordId: kw.id!,
+          websiteId: websiteId,
+          searchEngine: 'Yandex',
+          averagePosition: yandexAvgPos,
+          position: yandexAvgPos.round().clamp(1, 100),
+          rankingUrl: yandexRankingUrl,
+          clicks: yandexClicks,
+          impressions: yandexImpressions,
+          ctr: yandexCtr,
+          recordedAt: yandexSyncedAt ?? now,
+          source: 'yandex_api',
+        );
+      }
+
       // Update keyword record in SQLite
       final Map<String, dynamic> updateMap = {
         'url_match_status': matchStatus,
@@ -311,7 +476,6 @@ class SearchPerformanceSyncService {
         updateMap['google_synced_at'] =
             (googleSyncedAt ?? now).millisecondsSinceEpoch;
 
-        // If manual position was unpopulated or pending, populate it
         if (kw.googlePosition == null) {
           updateMap['google_position'] = googleAvgPos.round().clamp(1, 100);
         }
@@ -337,6 +501,23 @@ class SearchPerformanceSyncService {
         }
       }
 
+      if (yandexAvgPos != null) {
+        updateMap['yandex_average_position'] = yandexAvgPos;
+        updateMap['yandex_ranking_url'] = yandexRankingUrl;
+        updateMap['yandex_impressions'] = yandexImpressions;
+        updateMap['yandex_clicks'] = yandexClicks;
+        updateMap['yandex_ctr'] = yandexCtr;
+        updateMap['yandex_synced_at'] =
+            (yandexSyncedAt ?? now).millisecondsSinceEpoch;
+
+        if (kw.yandexPosition == null) {
+          updateMap['yandex_position'] = yandexAvgPos.round().clamp(1, 100);
+        }
+        if (kw.latestPosition == null && googleAvgPos == null && bingAvgPos == null) {
+          updateMap['latest_position'] = yandexAvgPos.round().clamp(1, 100);
+        }
+      }
+
       await db.update(
         DatabaseConstants.tableKeywords,
         updateMap,
@@ -350,10 +531,13 @@ class SearchPerformanceSyncService {
       matchedKeywords: matchedCount,
       googleQueriesAvailable: gscRows.length,
       bingQueriesAvailable: bingRows.length,
+      yandexQueriesAvailable: yandexRows.length,
       googleConnected: googleConnected || gscRows.isNotEmpty,
       bingConnected: bingConnected || bingRows.isNotEmpty,
+      yandexConnected: yandexConnected || yandexRows.isNotEmpty,
       googleStatusMessage: googleStatus,
       bingStatusMessage: bingStatus,
+      yandexStatusMessage: yandexStatus,
     );
   }
 
@@ -380,7 +564,15 @@ class SearchPerformanceSyncService {
       orderBy: 'metric_date DESC, clicks DESC',
     );
 
-    if (gscRows.isEmpty && bingRows.isEmpty) {
+    // Query matching Yandex rows
+    final yandexRows = await db.query(
+      DatabaseConstants.tableYandexSearchAnalytics,
+      where: 'website_id = ? AND LOWER(TRIM(query)) = ?',
+      whereArgs: [keyword.websiteId, normalizedKw],
+      orderBy: 'metric_date DESC, clicks DESC',
+    );
+
+    if (gscRows.isEmpty && bingRows.isEmpty && yandexRows.isEmpty) {
       // No search console metrics found yet for this query
       return keyword;
     }
@@ -437,8 +629,33 @@ class SearchPerformanceSyncService {
       }
     }
 
+    // Yandex data
+    double? yandexAvgPos;
+    String? yandexRankingUrl;
+    int yandexImpressions = 0;
+    int yandexClicks = 0;
+    double yandexCtr = 0.0;
+    DateTime? yandexSyncedAt;
+
+    if (yandexRows.isNotEmpty) {
+      final best = yandexRows.first;
+      yandexAvgPos = (best['average_position'] as num?)?.toDouble();
+      yandexRankingUrl = best['page_url'] as String?;
+      yandexSyncedAt = best['synced_at'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(best['synced_at'] as int)
+          : now;
+
+      for (final r in yandexRows) {
+        yandexClicks += (r['clicks'] as int? ?? 0);
+        yandexImpressions += (r['impressions'] as int? ?? 0);
+      }
+      if (yandexImpressions > 0) {
+        yandexCtr = yandexClicks / yandexImpressions;
+      }
+    }
+
     final bestRankingUrl =
-        googleRankingUrl ?? bingRankingUrl ?? keyword.rankingUrl;
+        googleRankingUrl ?? bingRankingUrl ?? yandexRankingUrl ?? keyword.rankingUrl;
     final matchStatus = UrlValidator.computeUrlMatchStatus(
       keyword.targetUrl,
       bestRankingUrl,
@@ -479,6 +696,23 @@ class SearchPerformanceSyncService {
       );
     }
 
+    if (yandexAvgPos != null && yandexAvgPos > 0) {
+      await _recordSearchObservationIfNotExists(
+        db: db,
+        keywordId: keyword.id!,
+        websiteId: keyword.websiteId,
+        searchEngine: 'Yandex',
+        averagePosition: yandexAvgPos,
+        position: yandexAvgPos.round().clamp(1, 100),
+        rankingUrl: yandexRankingUrl,
+        clicks: yandexClicks,
+        impressions: yandexImpressions,
+        ctr: yandexCtr,
+        recordedAt: yandexSyncedAt ?? now,
+        source: 'yandex_api',
+      );
+    }
+
     final updatedKeyword = keyword.copyWith(
       rankingUrl: bestRankingUrl,
       googleAveragePosition: googleAvgPos ?? keyword.googleAveragePosition,
@@ -497,6 +731,14 @@ class SearchPerformanceSyncService {
       bingClicks: bingClicks > 0 ? bingClicks : keyword.bingClicks,
       bingCtr: bingCtr > 0 ? bingCtr : keyword.bingCtr,
       bingSyncedAt: bingSyncedAt ?? keyword.bingSyncedAt,
+      yandexAveragePosition: yandexAvgPos ?? keyword.yandexAveragePosition,
+      yandexRankingUrl: yandexRankingUrl ?? keyword.yandexRankingUrl,
+      yandexImpressions: yandexImpressions > 0
+          ? yandexImpressions
+          : keyword.yandexImpressions,
+      yandexClicks: yandexClicks > 0 ? yandexClicks : keyword.yandexClicks,
+      yandexCtr: yandexCtr > 0 ? yandexCtr : keyword.yandexCtr,
+      yandexSyncedAt: yandexSyncedAt ?? keyword.yandexSyncedAt,
       urlMatchStatus: matchStatus,
       lastCheckedAt: now,
     );

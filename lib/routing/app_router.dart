@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/analysis/presentation/views/analysis_view.dart';
 import '../features/bing_webmaster/presentation/views/bing_webmaster_view.dart';
 import '../features/dashboard/presentation/views/dashboard_view.dart';
+import '../features/keywords/presentation/views/keywords_list_view.dart';
 import '../features/manual_tracking/presentation/views/manual_tracking_view.dart';
 import '../features/onboarding/presentation/views/onboarding_view.dart';
 import '../features/search_console/presentation/views/search_console_view.dart';
+import '../features/search_engines/presentation/views/search_engines_view.dart';
 import '../features/settings/presentation/views/logs_view.dart';
 import '../features/settings/presentation/views/settings_view.dart';
 import '../features/websites/presentation/views/websites_management_view.dart';
+import '../features/yandex_webmaster/presentation/views/yandex_webmaster_view.dart';
 import 'navigation_shell.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -36,12 +40,27 @@ GoRouter createAppRouter({String initialLocation = '/dashboard'}) => GoRouter(
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const WebsitesManagementView(),
     ),
+    GoRoute(
+      path: '/search-console',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const SearchConsoleView(),
+    ),
+    GoRoute(
+      path: '/bing-webmaster',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const BingWebmasterView(),
+    ),
+    GoRoute(
+      path: '/yandex-webmaster',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const YandexWebmasterView(),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
         return NavigationShell(navigationShell: navigationShell);
       },
       branches: [
-        // Tab 0: Dashboard
+        // Tab 0: Overview (Dashboard)
         StatefulShellBranch(
           routes: [
             GoRoute(
@@ -51,7 +70,27 @@ GoRouter createAppRouter({String initialLocation = '/dashboard'}) => GoRouter(
           ],
         ),
 
-        // Tab 1: Manual SERP Audit
+        // Tab 1: Keywords Management
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/keywords',
+              builder: (context, state) => const KeywordsListView(),
+            ),
+          ],
+        ),
+
+        // Tab 2: SEO Intelligence & Analysis
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/analysis',
+              builder: (context, state) => const AnalysisView(),
+            ),
+          ],
+        ),
+
+        // Tab 3: SERP Audit (Manual Tracking)
         StatefulShellBranch(
           routes: [
             GoRoute(
@@ -61,27 +100,17 @@ GoRouter createAppRouter({String initialLocation = '/dashboard'}) => GoRouter(
           ],
         ),
 
-        // Tab 2: Google Search Console
+        // Tab 4: Search Engines Hub
         StatefulShellBranch(
           routes: [
             GoRoute(
-              path: '/search-console',
-              builder: (context, state) => const SearchConsoleView(),
+              path: '/search-engines',
+              builder: (context, state) => const SearchEnginesView(),
             ),
           ],
         ),
 
-        // Tab 3: Bing Webmaster
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/bing-webmaster',
-              builder: (context, state) => const BingWebmasterView(),
-            ),
-          ],
-        ),
-
-        // Tab 4: Settings & Privacy
+        // Tab 5: Settings & Preferences
         StatefulShellBranch(
           routes: [
             GoRoute(

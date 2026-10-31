@@ -52,8 +52,10 @@ class BingWebmasterView extends ConsumerWidget {
     final selectedSiteId = ref.watch(selectedWebsiteIdProvider);
     final syncState = ref.watch(bingSyncNotifierProvider);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.surfacePrimary,
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
       appBar: AppBar(
         title: const Text(
           'Bing Webmaster Tools',

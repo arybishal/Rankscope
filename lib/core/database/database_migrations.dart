@@ -5,6 +5,7 @@ import 'migrations/m001_initial_schema.dart';
 import 'migrations/m002_add_logs_table.dart';
 import 'migrations/m003_keyword_intelligence.dart';
 import 'migrations/m004_search_performance_sync.dart';
+import 'migrations/m005_add_yandex_webmaster.dart';
 
 /// Registry and orchestrator for database migrations.
 class DatabaseMigrations {
@@ -15,6 +16,7 @@ class DatabaseMigrations {
     2: M002AddLogsTable(),
     3: M003KeywordIntelligence(),
     4: M004SearchPerformanceSync(),
+    5: M005AddYandexWebmaster(),
   };
 
   /// Executes all migrations needed to bring the database to target version.

@@ -8,6 +8,7 @@ import 'package:rankscope/features/websites/presentation/controllers/websites_co
 import 'package:rankscope/shared/widgets/cards/ranking_badge.dart';
 import 'package:rankscope/shared/widgets/dialogs/log_rank_dialog.dart';
 import 'package:rankscope/shared/widgets/feedback/empty_state_view.dart';
+import 'package:rankscope/shared/widgets/surfaces/glass_container.dart';
 
 class ManualTrackingView extends ConsumerStatefulWidget {
   const ManualTrackingView({super.key});
@@ -28,11 +29,12 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final websitesState = ref.watch(websitesProvider);
     final selectedSiteId = ref.watch(selectedWebsiteIdProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.surfacePrimary,
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
       appBar: AppBar(
         title: const Text('SERP Rank Audit', style: AppTextStyles.titleLarge),
       ),
@@ -47,7 +49,7 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
             return const EmptyStateView(
               icon: Icons.track_changes,
               title: 'No Properties Available',
-              description: 'Add a website on the Dashboard tab to begin manual SERP tracking.',
+              description: 'Add a website on the Overview tab to begin manual SERP tracking.',
             );
           }
 
@@ -108,15 +110,9 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
                           const SizedBox(height: AppSpacing.sm),
                       itemBuilder: (context, index) {
                         final kw = filtered[index];
-                        return Container(
+                        return GlassContainer(
                           padding: const EdgeInsets.all(AppSpacing.md),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfacePrimary,
-                            borderRadius: BorderRadius.circular(
-                              AppSpacing.cardRadius,
-                            ),
-                            border: Border.all(color: AppColors.borderSubtle),
-                          ),
+                          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
                           child: Row(
                             children: [
                               RankingBadge(
@@ -130,22 +126,26 @@ class _ManualTrackingViewState extends ConsumerState<ManualTrackingView> {
                                   children: [
                                     Text(
                                       kw.keywordText,
-                                      style: AppTextStyles.labelLarge,
+                                      style: AppTextStyles.labelLarge.copyWith(
+                                        color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                                      ),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
                                       kw.targetCity != null
                                           ? '${kw.targetCity}, ${kw.targetCountry}'
                                           : kw.targetCountry,
-                                      style: AppTextStyles.bodySmall,
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.accent,
-                                  foregroundColor: AppColors.surfacePrimary,
+                                  backgroundColor: isDark ? const Color(0xFF2563EB) : AppColors.accent,
+                                  foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 14,
                                     vertical: 8,

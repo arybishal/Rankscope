@@ -502,6 +502,10 @@ class _TestKeywordsRepository implements KeywordsRepository {
   Future<SearchSyncResult> syncPerformanceForWebsite({
     required int websiteId,
     required String domain,
+    String? gscPropertyId,
+    String? country,
+    String? device,
+    String? searchType,
   }) async => SearchSyncResult(
     totalKeywords: _keywords.length,
     matchedKeywords: 2,

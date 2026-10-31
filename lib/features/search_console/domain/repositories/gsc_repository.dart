@@ -18,5 +18,11 @@ abstract class GscRepository {
     required String siteUrl,
     required String startDate,
     required String endDate,
+    String? country,
+    String? device,
+    String? searchType,
   });
+
+  /// Lists verified site properties for authorized Google account.
+  Future<List<String>> listVerifiedSites();
 }

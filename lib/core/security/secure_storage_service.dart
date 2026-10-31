@@ -69,16 +69,23 @@ class SecureStorageService {
   // --- Google Search Console Credentials ---
 
   Future<void> saveGscRefreshToken(String token) async {
-    await _safeWrite(_keyGscRefreshToken, token);
+    await _safeWrite(_keyGscRefreshToken, token.trim());
   }
 
   Future<String?> getGscRefreshToken() async {
     return await _safeRead(_keyGscRefreshToken);
   }
 
-  Future<void> saveGscAccessToken(String token, int expiryEpochMs) async {
-    await _safeWrite(_keyGscAccessToken, token);
-    await _safeWrite(_keyGscTokenExpiry, expiryEpochMs.toString());
+  Future<void> saveGscAccessToken(String token, [int? expiryEpochMs]) async {
+    await _safeWrite(_keyGscAccessToken, token.trim());
+    if (expiryEpochMs != null) {
+      await _safeWrite(_keyGscTokenExpiry, expiryEpochMs.toString());
+    } else {
+      // Default expiry to 1 hour from now for manual token entries
+      final defaultExpiry =
+          DateTime.now().millisecondsSinceEpoch + (3600 * 1000);
+      await _safeWrite(_keyGscTokenExpiry, defaultExpiry.toString());
+    }
   }
 
   Future<String?> getGscAccessToken() async {
@@ -87,7 +94,10 @@ class SecureStorageService {
 
   Future<bool> isGscAccessTokenExpired() async {
     final expiryStr = await _safeRead(_keyGscTokenExpiry);
-    if (expiryStr == null) return true;
+    if (expiryStr == null) {
+      final token = await _safeRead(_keyGscAccessToken);
+      return token == null || token.trim().isEmpty;
+    }
     final expiry = int.tryParse(expiryStr) ?? 0;
     // Buffer with 60 seconds
     return DateTime.now().millisecondsSinceEpoch >= (expiry - 60000);

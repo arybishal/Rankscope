@@ -17,6 +17,7 @@ import 'package:rankscope/features/dashboard/presentation/controllers/dashboard_
 import 'package:rankscope/features/dashboard/presentation/views/dashboard_view.dart'
     hide yandexConfiguredProvider;
 import 'package:rankscope/features/keywords/presentation/controllers/keywords_controller.dart';
+import 'package:rankscope/features/search_console/presentation/controllers/gsc_controller.dart';
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
 import 'package:rankscope/features/yandex_webmaster/presentation/controllers/yandex_controller.dart';
 import 'package:share_plus/share_plus.dart';
@@ -40,10 +41,14 @@ class SettingsView extends ConsumerStatefulWidget {
 class _SettingsViewState extends ConsumerState<SettingsView> {
   final _bingKeyController = TextEditingController();
   final _gscClientController = TextEditingController();
+  final _gscAccessTokenController = TextEditingController();
+  final _gscRefreshTokenController = TextEditingController();
   final _yandexTokenController = TextEditingController();
   bool _isLoadingKeys = true;
   bool _isTestingBingKey = false;
+  bool _isTestingGscToken = false;
   bool _isTestingYandexToken = false;
+  List<String> _gscVerifiedSites = [];
   DateTime? _lastBackupDate;
   int _logErrorCount = 0;
   int _totalLogCount = 0;
@@ -69,12 +74,16 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     final storage = ref.read(secureStorageServiceProvider);
     final bingKey = await storage.getBingApiKey();
     final gscClient = await storage.getGscClientId();
+    final gscAccess = await storage.getGscAccessToken();
+    final gscRefresh = await storage.getGscRefreshToken();
     final yandexToken = await storage.getYandexOAuthToken();
 
     if (mounted) {
       setState(() {
         _bingKeyController.text = bingKey ?? '';
         _gscClientController.text = gscClient ?? '';
+        _gscAccessTokenController.text = gscAccess ?? '';
+        _gscRefreshTokenController.text = gscRefresh ?? '';
         _yandexTokenController.text = yandexToken ?? '';
         _isLoadingKeys = false;
       });
@@ -85,6 +94,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   void dispose() {
     _bingKeyController.dispose();
     _gscClientController.dispose();
+    _gscAccessTokenController.dispose();
+    _gscRefreshTokenController.dispose();
     _yandexTokenController.dispose();
     super.dispose();
   }
@@ -151,20 +162,81 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     }
   }
 
-  Future<void> _saveGscClientId() async {
+  Future<void> _saveGscCredentials() async {
     final storage = ref.read(secureStorageServiceProvider);
     final id = _gscClientController.text.trim();
+    final token = _gscAccessTokenController.text.trim();
+    final refresh = _gscRefreshTokenController.text.trim();
+
     if (id.isNotEmpty) {
       await storage.saveGscClientId(id);
-      await AppLogger.instance.info(
-        'Settings',
-        'gsc_client_id_saved',
-        'Saved Google OAuth Client ID',
-      );
     }
+    if (token.isNotEmpty) {
+      await storage.saveGscAccessToken(token);
+    }
+    if (refresh.isNotEmpty) {
+      await storage.saveGscRefreshToken(refresh);
+    }
+
+    if (id.isEmpty && token.isEmpty && refresh.isEmpty) {
+      await storage.clearGscCredentials();
+    }
+
+    ref.invalidate(googleConfiguredProvider);
+    await AppLogger.instance.info(
+      'Settings',
+      'gsc_credentials_saved',
+      'Updated Google Search Console credentials in Android KeyStore',
+    );
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google OAuth Client ID saved.')),
+        const SnackBar(
+          content: Text('Google Search Console credentials saved to Android KeyStore.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _testGscConnection() async {
+    setState(() => _isTestingGscToken = true);
+    final storage = ref.read(secureStorageServiceProvider);
+    final id = _gscClientController.text.trim();
+    final token = _gscAccessTokenController.text.trim();
+    final refresh = _gscRefreshTokenController.text.trim();
+
+    if (id.isNotEmpty) await storage.saveGscClientId(id);
+    if (token.isNotEmpty) await storage.saveGscAccessToken(token);
+    if (refresh.isNotEmpty) await storage.saveGscRefreshToken(refresh);
+
+    final sites = await ref.read(gscSyncNotifierProvider.notifier).testConnection();
+    if (!mounted) return;
+    setState(() {
+      _isTestingGscToken = false;
+      if (sites != null) {
+        _gscVerifiedSites = sites;
+      }
+    });
+
+    if (sites != null) {
+      ref.invalidate(googleConfiguredProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            sites.isNotEmpty
+                ? 'Google Search Console connected! Found ${sites.length} verified site(s).'
+                : 'Google Search Console connected, but no verified properties found on this account.',
+          ),
+          backgroundColor: AppColors.rankGain,
+        ),
+      );
+    } else {
+      final error = ref.read(gscSyncNotifierProvider).errorMessage ?? 'Connection failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.rankDrop,
+        ),
       );
     }
   }
@@ -1093,16 +1165,63 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Google Cloud OAuth Client ID',
-                        style: AppTextStyles.labelLarge,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Icon(
+                              Icons.search,
+                              size: 16,
+                              color: Color(0xFF2563EB),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Google Search Console API',
+                            style: AppTextStyles.labelLarge,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       const Text(
-                        'Uses serverless OAuth 2.0 PKCE directly from your Android phone to Google. Zero intermediate server.',
+                        'Direct HTTPS connection to Google Search Console API v3. Stored securely in hardware-backed Android KeyStore with zero intermediate server.',
                         style: AppTextStyles.bodySmall,
                       ),
                       const SizedBox(height: AppSpacing.md),
+
+                      const Text(
+                        'OAuth 2.0 Access Token',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _gscAccessTokenController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          hintText: 'Paste OAuth access token (ya29...)...',
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.content_paste, size: 18),
+                            tooltip: 'Paste from clipboard',
+                            onPressed: () async {
+                              final data = await Clipboard.getData('text/plain');
+                              if (data?.text != null) {
+                                _gscAccessTokenController.text = data!.text!.trim();
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+
+                      const Text(
+                        'OAuth Client ID (Optional)',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
                       TextField(
                         controller: _gscClientController,
                         decoration: const InputDecoration(
@@ -1110,9 +1229,99 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      ElevatedButton(
-                        onPressed: _saveGscClientId,
-                        child: const Text('Save Client ID'),
+
+                      const Text(
+                        'OAuth Refresh Token (Optional)',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _gscRefreshTokenController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          hintText: '1//... (for automated background token renewal)',
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+
+                      if (_gscVerifiedSites.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(AppSpacing.sm),
+                          decoration: BoxDecoration(
+                            color: AppColors.rankGain.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                            border: Border.all(
+                              color: AppColors.rankGain.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.verified,
+                                    size: 16,
+                                    color: AppColors.rankGain,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Connected Properties (${_gscVerifiedSites.length}):',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.rankGain,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: _gscVerifiedSites.map((site) {
+                                  return Chip(
+                                    label: Text(
+                                      site,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontFamily: 'monospace',
+                                      ),
+                                    ),
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ElevatedButton(
+                            onPressed: _saveGscCredentials,
+                            child: const Text('Save Credentials'),
+                          ),
+                          OutlinedButton(
+                            onPressed: _isTestingGscToken ? null : _testGscConnection,
+                            child: _isTestingGscToken
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.accent,
+                                    ),
+                                  )
+                                : const Text('Test Connection'),
+                          ),
+                        ],
                       ),
                     ],
                   ),

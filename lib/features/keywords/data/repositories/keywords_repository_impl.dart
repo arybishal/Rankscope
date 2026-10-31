@@ -206,11 +206,19 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
   Future<SearchSyncResult> syncPerformanceForWebsite({
     required int websiteId,
     required String domain,
+    String? gscPropertyId,
+    String? country,
+    String? device,
+    String? searchType,
   }) async {
     try {
       return await _syncService.syncPerformanceForWebsite(
         websiteId: websiteId,
         domain: domain,
+        gscPropertyId: gscPropertyId,
+        country: country,
+        device: device,
+        searchType: searchType,
       );
     } catch (e) {
       throw DatabaseFailure('Failed to sync search performance: $e');

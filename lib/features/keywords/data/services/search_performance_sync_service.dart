@@ -9,6 +9,7 @@ import '../../../bing_webmaster/data/repositories/bing_repository_impl.dart';
 import '../../../bing_webmaster/domain/repositories/bing_repository.dart';
 import '../../../search_console/data/repositories/gsc_repository_impl.dart';
 import '../../../search_console/domain/repositories/gsc_repository.dart';
+import '../../../search_console/domain/utils/gsc_property_matcher.dart';
 import '../../../yandex_webmaster/data/repositories/yandex_repository_impl.dart';
 import '../../../yandex_webmaster/domain/repositories/yandex_repository.dart';
 import '../../domain/entities/keyword.dart';
@@ -105,6 +106,9 @@ class SearchPerformanceSyncService {
     String? gscPropertyId,
     String? bingSiteUrl,
     String? yandexHostId,
+    String? country,
+    String? device,
+    String? searchType,
   }) async {
     final db = await _dbManager.database;
 
@@ -142,16 +146,71 @@ class SearchPerformanceSyncService {
         final startDate =
             "${startDate30.year}-${startDate30.month.toString().padLeft(2, '0')}-${startDate30.day.toString().padLeft(2, '0')}";
 
+        // If GSC property not mapped yet, attempt auto-discovery from verified sites
+        if (effectiveGscProp == null || effectiveGscProp.isEmpty) {
+          try {
+            final verifiedSites = await _gscRepository.listVerifiedSites();
+            final matched = GscPropertyMatcher.findMatchingProperty(
+              domain,
+              verifiedSites,
+            );
+            if (matched != null) {
+              effectiveGscProp = matched;
+              await db.update(
+                DatabaseConstants.tableWebsites,
+                {'gsc_property_id': effectiveGscProp},
+                where: 'id = ?',
+                whereArgs: [websiteId],
+              );
+            }
+          } catch (_) {
+            // Non-critical discovery error; proceed to default site URL
+          }
+        }
+
         final siteUrl = (effectiveGscProp != null && effectiveGscProp.isNotEmpty)
             ? effectiveGscProp
-            : (domain.startsWith('http') ? domain : 'https://$domain/');
+            : GscPropertyMatcher.defaultSiteUrl(domain);
 
-        final gscCount = await _gscRepository.syncMetricsFromApi(
-          websiteId: websiteId,
-          siteUrl: siteUrl,
-          startDate: startDate,
-          endDate: endDate,
-        );
+        int gscCount = 0;
+        try {
+          gscCount = await _gscRepository.syncMetricsFromApi(
+            websiteId: websiteId,
+            siteUrl: siteUrl,
+            startDate: startDate,
+            endDate: endDate,
+            country: country,
+            device: device,
+            searchType: searchType,
+          );
+        } catch (initialErr) {
+          // If the initial site URL failed, attempt domain property / url prefix fallback
+          final bare = GscPropertyMatcher.normalizeToBareDomain(domain);
+          final altSiteUrl = siteUrl.startsWith('sc-domain:')
+              ? 'https://$bare/'
+              : 'sc-domain:$bare';
+          if (siteUrl != altSiteUrl) {
+            gscCount = await _gscRepository.syncMetricsFromApi(
+              websiteId: websiteId,
+              siteUrl: altSiteUrl,
+              startDate: startDate,
+              endDate: endDate,
+              country: country,
+              device: device,
+              searchType: searchType,
+            );
+            effectiveGscProp = altSiteUrl;
+            await db.update(
+              DatabaseConstants.tableWebsites,
+              {'gsc_property_id': altSiteUrl},
+              where: 'id = ?',
+              whereArgs: [websiteId],
+            );
+          } else {
+            rethrow;
+          }
+        }
+
         googleStatus = 'Synced $gscCount GSC queries';
       } catch (e) {
         googleStatus = 'Google sync: $e';
@@ -334,12 +393,24 @@ class SearchPerformanceSyncService {
             ? DateTime.fromMillisecondsSinceEpoch(bestGsc['synced_at'] as int)
             : now;
 
+        double weightedPosSum = 0.0;
+        int weightedImpSum = 0;
         for (final row in matchingGsc) {
-          googleClicks += (row['clicks'] as int? ?? 0);
-          googleImpressions += (row['impressions'] as int? ?? 0);
+          final c = (row['clicks'] as int? ?? 0);
+          final imp = (row['impressions'] as int? ?? 0);
+          final pos = (row['average_position'] as num?)?.toDouble() ?? 0.0;
+          googleClicks += c;
+          googleImpressions += imp;
+          if (imp > 0 && pos > 0) {
+            weightedPosSum += (pos * imp);
+            weightedImpSum += imp;
+          }
         }
         if (googleImpressions > 0) {
           googleCtr = googleClicks / googleImpressions;
+          if (weightedImpSum > 0) {
+            googleAvgPos = weightedPosSum / weightedImpSum;
+          }
         }
       }
 
@@ -467,7 +538,11 @@ class SearchPerformanceSyncService {
         updateMap['ranking_url'] = bestRankingUrl;
       }
 
-      if (googleAvgPos != null) {
+      if (googleAvgPos != null && googleAvgPos > 0) {
+        final newGooglePos = googleAvgPos.round().clamp(1, 100);
+        final priorPos = kw.googlePosition;
+        final delta = priorPos != null ? (priorPos - newGooglePos) : 0;
+
         updateMap['google_average_position'] = googleAvgPos;
         updateMap['google_ranking_url'] = googleRankingUrl;
         updateMap['google_impressions'] = googleImpressions;
@@ -475,12 +550,15 @@ class SearchPerformanceSyncService {
         updateMap['google_ctr'] = googleCtr;
         updateMap['google_synced_at'] =
             (googleSyncedAt ?? now).millisecondsSinceEpoch;
-
-        if (kw.googlePosition == null) {
-          updateMap['google_position'] = googleAvgPos.round().clamp(1, 100);
+        updateMap['google_position'] = newGooglePos;
+        if (priorPos != null && priorPos != newGooglePos) {
+          updateMap['google_previous_position'] = priorPos;
         }
+        updateMap['google_delta'] = delta;
+
         if (kw.latestPosition == null) {
-          updateMap['latest_position'] = googleAvgPos.round().clamp(1, 100);
+          updateMap['latest_position'] = newGooglePos;
+          updateMap['position_delta'] = delta;
         }
       }
 
@@ -595,12 +673,24 @@ class SearchPerformanceSyncService {
           ? DateTime.fromMillisecondsSinceEpoch(best['synced_at'] as int)
           : now;
 
+      double weightedPosSum = 0.0;
+      int weightedImpSum = 0;
       for (final r in gscRows) {
-        googleClicks += (r['clicks'] as int? ?? 0);
-        googleImpressions += (r['impressions'] as int? ?? 0);
+        final c = (r['clicks'] as int? ?? 0);
+        final imp = (r['impressions'] as int? ?? 0);
+        final pos = (r['average_position'] as num?)?.toDouble() ?? 0.0;
+        googleClicks += c;
+        googleImpressions += imp;
+        if (imp > 0 && pos > 0) {
+          weightedPosSum += (pos * imp);
+          weightedImpSum += imp;
+        }
       }
       if (googleImpressions > 0) {
         googleCtr = googleClicks / googleImpressions;
+        if (weightedImpSum > 0) {
+          googleAvgPos = weightedPosSum / weightedImpSum;
+        }
       }
     }
 
@@ -767,14 +857,31 @@ class SearchPerformanceSyncService {
     required DateTime recordedAt,
     required String source,
   }) async {
+    final startOfDay = DateTime(
+      recordedAt.year,
+      recordedAt.month,
+      recordedAt.day,
+    ).millisecondsSinceEpoch;
+    final endOfDay = DateTime(
+      recordedAt.year,
+      recordedAt.month,
+      recordedAt.day,
+      23,
+      59,
+      59,
+      999,
+    ).millisecondsSinceEpoch;
+
     final existing = await db.query(
       DatabaseConstants.tableRankObservations,
-      where: 'keyword_id = ? AND search_engine = ? AND source = ? AND recorded_at = ?',
+      where:
+          'keyword_id = ? AND search_engine = ? AND source = ? AND recorded_at >= ? AND recorded_at <= ?',
       whereArgs: [
         keywordId,
         searchEngine,
         source,
-        recordedAt.millisecondsSinceEpoch,
+        startOfDay,
+        endOfDay,
       ],
       limit: 1,
     );
@@ -797,7 +904,24 @@ class SearchPerformanceSyncService {
       await db.insert(
         DatabaseConstants.tableRankObservations,
         obs.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.ignore,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } else {
+      final id = existing.first['id'] as int;
+      await db.update(
+        DatabaseConstants.tableRankObservations,
+        {
+          'position': position,
+          'average_position': averagePosition,
+          'clicks': clicks,
+          'impressions': impressions,
+          'ctr': ctr,
+          'ranking_url': rankingUrl,
+          'recorded_at': recordedAt.millisecondsSinceEpoch,
+          'observation_status': position > 0 ? 'ranking' : 'not_ranking',
+        },
+        where: 'id = ?',
+        whereArgs: [id],
       );
     }
   }

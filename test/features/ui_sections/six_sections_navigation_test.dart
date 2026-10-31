@@ -92,8 +92,9 @@ class _FakeKeywordsRepository implements KeywordsRepository {
     required int websiteId,
     required String domain,
     String? gscPropertyId,
-    String? bingSiteUrl,
-    String? yandexHostId,
+    String? country,
+    String? device,
+    String? searchType,
   }) async {
     return const SearchSyncResult(
       totalKeywords: 0,

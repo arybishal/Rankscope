@@ -57,6 +57,9 @@ class GscRepositoryImpl implements GscRepository {
     required String siteUrl,
     required String startDate,
     required String endDate,
+    String? country,
+    String? device,
+    String? searchType,
   }) async {
     try {
       final remoteRows = await _remoteDatasource.querySearchAnalytics(
@@ -64,12 +67,24 @@ class GscRepositoryImpl implements GscRepository {
         siteUrl: siteUrl,
         startDate: startDate,
         endDate: endDate,
+        country: country,
+        device: device,
+        searchType: searchType,
       );
 
       if (remoteRows.isEmpty) return 0;
       return await _localDatasource.upsertMetricsBatch(remoteRows);
     } catch (e) {
       throw NetworkFailure('Failed to synchronize GSC data: $e');
+    }
+  }
+
+  @override
+  Future<List<String>> listVerifiedSites() async {
+    try {
+      return await _remoteDatasource.listVerifiedSites();
+    } catch (e) {
+      throw NetworkFailure('Failed to list GSC verified sites: $e');
     }
   }
 }

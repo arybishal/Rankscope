@@ -804,7 +804,7 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
           if (showGoogle) ...[
             _buildEngineDetailsRow(
               isDark: isDark,
-              engineName: 'Google Search Console',
+              engineName: 'Google Search Console Average Position',
               icon: Icons.search,
               brandColor: const Color(0xFF1D4ED8),
               avgPos: kw.googleAveragePosition,
@@ -861,7 +861,7 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Manual SERP Audit Ranks',
+                        'Manual Observation',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
@@ -958,7 +958,9 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                 ],
               ] else ...[
                 Text(
-                  'No search performance data recorded yet.',
+                  engineName.contains('Google')
+                      ? 'No Google data available'
+                      : 'No search performance data recorded yet.',
                   style: TextStyle(
                     fontSize: 11,
                     fontStyle: FontStyle.italic,

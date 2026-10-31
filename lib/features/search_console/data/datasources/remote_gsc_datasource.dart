@@ -44,24 +44,59 @@ class RemoteGscDatasource {
     }
   }
 
-  /// Ingests search analytics query metrics for a date range.
+  /// Ingests search analytics query metrics for a date range with optional filters.
   Future<List<GscMetricModel>> querySearchAnalytics({
     required int websiteId,
     required String siteUrl,
     required String startDate, // YYYY-MM-DD
     required String endDate, // YYYY-MM-DD
     int rowLimit = 5000,
+    String? country,
+    String? device,
+    String? searchType,
   }) async {
     final token = await _getValidAccessToken();
     final encodedSite = Uri.encodeComponent(siteUrl);
     final url = Uri.parse('$_baseUrl/sites/$encodedSite/searchAnalytics/query');
 
-    final body = json.encode({
+    final Map<String, dynamic> requestPayload = {
       'startDate': startDate,
       'endDate': endDate,
       'dimensions': ['date', 'query', 'page', 'country', 'device'],
       'rowLimit': rowLimit,
-    });
+    };
+
+    if (searchType != null && searchType.isNotEmpty) {
+      requestPayload['type'] = searchType.toLowerCase();
+    }
+
+    final List<Map<String, dynamic>> filters = [];
+    if (country != null &&
+        country.isNotEmpty &&
+        country.toUpperCase() != 'GLOBAL' &&
+        country.toLowerCase() != 'all') {
+      filters.add({
+        'dimension': 'country',
+        'operator': 'equals',
+        'expression': country.toLowerCase(),
+      });
+    }
+    if (device != null &&
+        device.isNotEmpty &&
+        device.toLowerCase() != 'all') {
+      filters.add({
+        'dimension': 'device',
+        'operator': 'equals',
+        'expression': device.toUpperCase(),
+      });
+    }
+    if (filters.isNotEmpty) {
+      requestPayload['dimensionFilterGroups'] = [
+        {'filters': filters}
+      ];
+    }
+
+    final body = json.encode(requestPayload);
 
     final response = await _client.post(
       url,
@@ -99,20 +134,23 @@ class RemoteGscDatasource {
   }
 
   Future<String> _getValidAccessToken() async {
-    final isExpired = await _secureStorage.isGscAccessTokenExpired();
     String? token = await _secureStorage.getGscAccessToken();
+    final isExpired = await _secureStorage.isGscAccessTokenExpired();
 
     if (token == null || isExpired) {
-      token = await _refreshAccessToken();
+      final refreshed = await _refreshAccessToken();
+      if (refreshed != null && refreshed.isNotEmpty) {
+        return refreshed;
+      }
     }
 
-    if (token == null) {
-      throw const AuthException(
-        'No valid Google Search Console authentication token available.',
-      );
+    if (token != null && token.isNotEmpty) {
+      return token;
     }
 
-    return token;
+    throw const AuthException(
+      'No valid Google Search Console authentication token available.',
+    );
   }
 
   Future<String?> _refreshAccessToken() async {

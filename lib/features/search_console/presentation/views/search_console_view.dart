@@ -3,30 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rankscope/core/theme/app_colors.dart';
 import 'package:rankscope/core/theme/app_text_styles.dart';
 import 'package:rankscope/core/theme/spacing.dart';
-import 'package:rankscope/features/search_console/data/datasources/local_gsc_datasource.dart';
-import 'package:rankscope/features/search_console/domain/entities/gsc_metric.dart';
+import 'package:rankscope/features/keywords/presentation/controllers/keywords_controller.dart';
+import 'package:rankscope/features/search_console/presentation/controllers/gsc_controller.dart';
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
+
+export '../controllers/gsc_controller.dart';
 import 'package:rankscope/shared/widgets/cards/rank_metric_card.dart';
 import 'package:rankscope/shared/widgets/feedback/empty_state_view.dart';
 import 'package:rankscope/shared/widgets/surfaces/glass_container.dart';
-
-final localGscDatasourceProvider = Provider<LocalGscDatasource>((ref) {
-  return LocalGscDatasource();
-});
-
-final gscMetricsFutureProvider = FutureProvider.family<List<GscMetric>, int>((
-  ref,
-  websiteId,
-) async {
-  final ds = ref.watch(localGscDatasourceProvider);
-  return await ds.getMetrics(websiteId, limit: 100);
-});
-
-final gscAggregatesFutureProvider =
-    FutureProvider.family<Map<String, dynamic>, int>((ref, websiteId) async {
-      final ds = ref.watch(localGscDatasourceProvider);
-      return await ds.getAggregates(websiteId);
-    });
 
 class SearchConsoleView extends ConsumerWidget {
   const SearchConsoleView({super.key});
@@ -36,38 +20,106 @@ class SearchConsoleView extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final websitesState = ref.watch(websitesProvider);
     final selectedSiteId = ref.watch(selectedWebsiteIdProvider);
+    final syncState = ref.watch(searchPerformanceSyncProvider);
 
-    return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
-      appBar: AppBar(
-        title: const Text(
-          'Google Search Console',
-          style: AppTextStyles.titleLarge,
+    return websitesState.when(
+      loading: () => Scaffold(
+        backgroundColor: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
+        appBar: AppBar(
+          title: const Text('Google Search Console', style: AppTextStyles.titleLarge),
         ),
+        body: const Center(child: CircularProgressIndicator(color: AppColors.accent)),
       ),
-      body: websitesState.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.accent),
+      error: (err, _) => Scaffold(
+        backgroundColor: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
+        appBar: AppBar(
+          title: const Text('Google Search Console', style: AppTextStyles.titleLarge),
         ),
-        error: (err, _) => Center(child: Text('Error: $err')),
-        data: (websites) {
-          final activeWebsite = websites.findActive(selectedSiteId);
-          if (activeWebsite == null) {
-            return const EmptyStateView(
-              icon: Icons.search,
-              title: 'No Website Selected',
-              description: 'Register a website on the Overview tab to view Google Search Console metrics.',
+        body: Center(child: Text('Error: $err')),
+      ),
+      data: (websites) {
+        final activeWebsite = websites.findActive(selectedSiteId);
+
+        return Scaffold(
+          backgroundColor: isDark ? AppColors.darkBackground : AppColors.surfacePrimary,
+          appBar: AppBar(
+            title: const Text(
+              'Google Search Console',
+              style: AppTextStyles.titleLarge,
+            ),
+            actions: [
+              if (activeWebsite != null)
+                IconButton(
+                  icon: syncState.isSyncing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.sync),
+                  tooltip: 'Sync GSC Data',
+                  onPressed: syncState.isSyncing
+                      ? null
+                      : () async {
+                          final res = await ref
+                              .read(searchPerformanceSyncProvider.notifier)
+                              .syncPerformance(
+                                websiteId: activeWebsite.id!,
+                                domain: activeWebsite.domain,
+                              );
+                          if (context.mounted && res != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  res.googleStatusMessage ??
+                                      'Google Search Console synchronized.',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                ),
+            ],
+          ),
+          body: activeWebsite == null
+              ? const EmptyStateView(
+                  icon: Icons.search,
+                  title: 'No Website Selected',
+                  description:
+                      'Register a website on the Overview tab to view Google Search Console metrics.',
+                )
+              : _buildContent(context, ref, isDark, activeWebsite),
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    WidgetRef ref,
+    bool isDark,
+    dynamic activeWebsite,
+  ) {
+    final metricsAsync = ref.watch(
+      gscMetricsFutureProvider(activeWebsite.id!),
+    );
+    final aggregatesAsync = ref.watch(
+      gscAggregatesFutureProvider(activeWebsite.id!),
+    );
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await ref
+            .read(searchPerformanceSyncProvider.notifier)
+            .syncPerformance(
+              websiteId: activeWebsite.id!,
+              domain: activeWebsite.domain,
             );
-          }
-
-          final metricsAsync = ref.watch(
-            gscMetricsFutureProvider(activeWebsite.id!),
-          );
-          final aggregatesAsync = ref.watch(
-            gscAggregatesFutureProvider(activeWebsite.id!),
-          );
-
-          return ListView(
+      },
+      child: ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
               // Disambiguation Alert Box
@@ -263,9 +315,7 @@ class SearchConsoleView extends ConsumerWidget {
                 },
               ),
             ],
-          );
-        },
-      ),
-    );
+          ),
+        );
   }
 }

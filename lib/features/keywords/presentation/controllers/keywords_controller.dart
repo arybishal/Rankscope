@@ -44,6 +44,10 @@ class SearchPerformanceSyncNotifier
   Future<SearchSyncResult?> syncPerformance({
     required int websiteId,
     required String domain,
+    String? gscPropertyId,
+    String? country,
+    String? device,
+    String? searchType,
   }) async {
     state = state.copyWith(isSyncing: true, errorMessage: null);
 
@@ -52,6 +56,10 @@ class SearchPerformanceSyncNotifier
       final result = await repo.syncPerformanceForWebsite(
         websiteId: websiteId,
         domain: domain,
+        gscPropertyId: gscPropertyId,
+        country: country,
+        device: device,
+        searchType: searchType,
       );
 
       state = state.copyWith(

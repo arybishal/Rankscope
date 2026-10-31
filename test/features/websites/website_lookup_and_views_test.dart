@@ -97,6 +97,10 @@ class _FakeKeywordsRepository implements KeywordsRepository {
   Future<SearchSyncResult> syncPerformanceForWebsite({
     required int websiteId,
     required String domain,
+    String? gscPropertyId,
+    String? country,
+    String? device,
+    String? searchType,
   }) async => const SearchSyncResult(
     totalKeywords: 0,
     matchedKeywords: 0,

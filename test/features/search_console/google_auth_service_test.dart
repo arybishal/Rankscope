@@ -11,6 +11,7 @@ import 'package:rankscope/features/websites/presentation/controllers/websites_co
 
 class _FakeSecureStorage extends SecureStorageService {
   String? clientId;
+  String? serverClientId;
   String? accessToken;
   String? refreshToken;
   String? userEmail;
@@ -22,6 +23,15 @@ class _FakeSecureStorage extends SecureStorageService {
   Future<String?> getGscClientId() async => clientId;
   @override
   Future<void> saveGscClientId(String id) async => clientId = id;
+  @override
+  Future<void> clearGscClientId() async => clientId = null;
+
+  @override
+  Future<String?> getGscServerClientId() async => serverClientId;
+  @override
+  Future<void> saveGscServerClientId(String id) async => serverClientId = id;
+  @override
+  Future<void> clearGscServerClientId() async => serverClientId = null;
 
   @override
   Future<String?> getGscAccessToken() async => accessToken;
@@ -56,7 +66,6 @@ class _FakeSecureStorage extends SecureStorageService {
 
   @override
   Future<void> clearGscCredentials() async {
-    clientId = null;
     accessToken = null;
     refreshToken = null;
     userEmail = null;
@@ -91,13 +100,22 @@ class _FakeGoogleSignInAdapter implements GoogleSignInAdapter {
   bool signedOut = false;
   String returnEmail = 'developer@rankscope.com';
   String returnAccessToken = 'ya29.fake_test_token';
+  String? initializedClientId;
+  String? initializedServerClientId;
+  int initializeCount = 0;
 
   @override
-  Future<void> initialize({String? clientId, String? serverClientId}) async {}
+  Future<void> initialize({String? clientId, String? serverClientId}) async {
+    initializeCount++;
+    initializedClientId = clientId;
+    initializedServerClientId = serverClientId;
+  }
 
   @override
   Future<GoogleAccountResult> authenticateAndAuthorize({
     required List<String> scopes,
+    String? clientId,
+    String? serverClientId,
   }) async {
     if (throwCancellation) {
       throw const GoogleSignInException(
@@ -122,6 +140,13 @@ class _FakeGoogleSignInAdapter implements GoogleSignInAdapter {
   Future<void> signOut() async {
     signedOut = true;
   }
+
+  bool allowSilentRefresh = false;
+  String returnFreshAccessToken = 'ya29.fresh_refreshed_token';
+
+  @override
+  Future<String?> getFreshAccessToken({required List<String> scopes}) async =>
+      allowSilentRefresh ? returnFreshAccessToken : null;
 }
 
 void main() {
@@ -208,6 +233,7 @@ void main() {
     test('7. signInAndAuthorize successfully logs in and transitions to Connected', () async {
       final status = await authService.signInAndAuthorize(
         clientId: 'custom-client-id.apps.googleusercontent.com',
+        serverClientId: 'custom-server-client-id.apps.googleusercontent.com',
       );
 
       expect(status.state, GscConnectionState.connected);
@@ -215,10 +241,13 @@ void main() {
       expect(storage.accessToken, 'ya29.fake_test_token');
       expect(storage.userEmail, 'developer@rankscope.com');
       expect(storage.clientId, 'custom-client-id.apps.googleusercontent.com');
+      expect(storage.serverClientId, 'custom-server-client-id.apps.googleusercontent.com');
+      expect(signInAdapter.initializedServerClientId, 'custom-server-client-id.apps.googleusercontent.com');
     });
 
     test('8. signInAndAuthorize handles user cancellation gracefully', () async {
       storage.clientId = 'client_123';
+      storage.serverClientId = 'server_client_123';
       signInAdapter.throwCancellation = true;
 
       final status = await authService.signInAndAuthorize();
@@ -226,7 +255,9 @@ void main() {
       expect(status.message, contains('cancelled'));
     });
 
-    test('9. disconnect signs out and clears credentials', () async {
+    test('9. disconnect signs out and clears credentials but preserves configured client IDs', () async {
+      storage.clientId = 'client_123';
+      storage.serverClientId = 'server_123';
       storage.accessToken = 'valid_token';
       storage.userEmail = 'dev@rankscope.com';
 
@@ -235,6 +266,28 @@ void main() {
       expect(signInAdapter.signedOut, isTrue);
       expect(storage.accessToken, isNull);
       expect(storage.userEmail, isNull);
+      expect(storage.clientId, 'client_123');
+      expect(storage.serverClientId, 'server_123');
+    });
+
+    test('10. signInAndAuthorize requires serverClientId on Android', () async {
+      storage.clientId = 'android_client_only';
+      storage.serverClientId = null;
+
+      final status = await authService.signInAndAuthorize();
+      expect(status.state, GscConnectionState.connectionError);
+      expect(status.message, contains('serverClientId'));
+    });
+
+    test('11. checkConnectionStatus performs silent token refresh when access token is expired', () async {
+      storage.accessToken = 'expired_token';
+      storage.tokenExpired = true;
+      signInAdapter.allowSilentRefresh = true;
+      signInAdapter.returnFreshAccessToken = 'ya29.fresh_refreshed_token';
+
+      final status = await authService.checkConnectionStatus(verifyWithApi: true);
+      expect(status.state, GscConnectionState.connected);
+      expect(storage.accessToken, 'ya29.fresh_refreshed_token');
     });
   });
 

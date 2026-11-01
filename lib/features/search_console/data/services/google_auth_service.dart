@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_sign_in_platform_interface/google_sign_in_platform_interface.dart';
 
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/logging/app_logger.dart';
@@ -163,36 +164,71 @@ abstract class GoogleSignInAdapter {
   Future<void> initialize({String? clientId, String? serverClientId});
   Future<GoogleAccountResult> authenticateAndAuthorize({
     required List<String> scopes,
+    String? clientId,
+    String? serverClientId,
   });
   Future<void> signOut();
+  Future<String?> getFreshAccessToken({required List<String> scopes});
 }
 
 /// Default production adapter using the official `google_sign_in` plugin.
 class DefaultGoogleSignInAdapter implements GoogleSignInAdapter {
-  bool _initialized = false;
+  Future<void>? _initFuture;
+  String? _initializedServerClientId;
+  String? _initializedClientId;
 
   @override
   Future<void> initialize({String? clientId, String? serverClientId}) async {
-    if (_initialized) return;
-    try {
-      await GoogleSignIn.instance.initialize(
-        clientId: clientId?.isNotEmpty == true ? clientId : null,
-        serverClientId:
-            serverClientId?.isNotEmpty == true ? serverClientId : null,
-      );
-      _initialized = true;
-    } catch (e) {
-      // Re-initialization or already initialized
-      _initialized = true;
+    final sanitizedClientId =
+        clientId?.isNotEmpty == true ? clientId!.trim() : null;
+    final sanitizedServerClientId =
+        serverClientId?.isNotEmpty == true ? serverClientId!.trim() : null;
+
+    if (_initFuture == null) {
+      _initFuture = () async {
+        try {
+          await GoogleSignIn.instance.initialize(
+            clientId: sanitizedClientId,
+            serverClientId: sanitizedServerClientId,
+          );
+          _initializedClientId = sanitizedClientId;
+          _initializedServerClientId = sanitizedServerClientId;
+        } catch (_) {
+          _initializedClientId = sanitizedClientId;
+          _initializedServerClientId = sanitizedServerClientId;
+        }
+      }();
+      await _initFuture;
+    } else {
+      await _initFuture;
+      // If serverClientId or clientId changed, update the underlying platform instance directly
+      // without calling GoogleSignIn.instance.initialize a second time.
+      if (sanitizedServerClientId != _initializedServerClientId ||
+          sanitizedClientId != _initializedClientId) {
+        try {
+          await GoogleSignInPlatform.instance.init(
+            InitParameters(
+              clientId: sanitizedClientId,
+              serverClientId: sanitizedServerClientId,
+            ),
+          );
+          _initializedClientId = sanitizedClientId;
+          _initializedServerClientId = sanitizedServerClientId;
+        } catch (_) {}
+      }
     }
   }
 
   @override
   Future<GoogleAccountResult> authenticateAndAuthorize({
     required List<String> scopes,
+    String? clientId,
+    String? serverClientId,
   }) async {
-    final account = await GoogleSignIn.instance.authenticate(scopeHint: scopes);
+    // Ensure initialized and awaited before authenticating
+    await initialize(clientId: clientId, serverClientId: serverClientId);
 
+    final account = await GoogleSignIn.instance.authenticate(scopeHint: scopes);
     final authz = await account.authorizationClient.authorizeScopes(scopes);
 
     return GoogleAccountResult(
@@ -207,6 +243,22 @@ class DefaultGoogleSignInAdapter implements GoogleSignInAdapter {
     try {
       await GoogleSignIn.instance.signOut();
     } catch (_) {}
+  }
+
+  @override
+  Future<String?> getFreshAccessToken({required List<String> scopes}) async {
+    try {
+      final account =
+          await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (account != null) {
+        final authz =
+            await account.authorizationClient.authorizationForScopes(scopes);
+        if (authz?.accessToken.isNotEmpty == true) {
+          return authz!.accessToken;
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 }
 
@@ -236,6 +288,7 @@ class GoogleAuthService {
   }) async {
     try {
       final clientId = await _secureStorage.getGscClientId();
+      final serverClientId = await _secureStorage.getGscServerClientId();
       final accessToken = await _secureStorage.getGscAccessToken();
       final refreshToken = await _secureStorage.getGscRefreshToken();
       final userEmail = await _secureStorage.getGscUserEmail();
@@ -245,11 +298,15 @@ class GoogleAuthService {
       // Case 1: No access token and no refresh token
       if ((accessToken == null || accessToken.isEmpty) &&
           (refreshToken == null || refreshToken.isEmpty)) {
-        if (clientId != null && clientId.trim().isNotEmpty) {
+        if ((serverClientId != null && serverClientId.trim().isNotEmpty) ||
+            (clientId != null && clientId.trim().isNotEmpty)) {
+          final displayId = (serverClientId?.isNotEmpty == true)
+              ? serverClientId!.trim()
+              : clientId!.trim();
           return GscConnectionStatus.readyToConnect(
-            clientId: clientId.trim(),
+            clientId: displayId,
             message:
-                'OAuth Client ID configured ($clientId). Tap "Connect with Google" to authorize Search Console.',
+                'OAuth Client ID configured ($displayId). Tap "Connect with Google" to authorize Search Console.',
           );
         }
         return GscConnectionStatus.notConfigured();
@@ -258,11 +315,19 @@ class GoogleAuthService {
       // Case 2: Token exists, check expiration
       final isExpired = await _secureStorage.isGscAccessTokenExpired();
       if (isExpired && (refreshToken == null || refreshToken.isEmpty)) {
-        return GscConnectionStatus.actionRequired(
-          message:
-              'Google authorization token has expired. Please re-authorize.',
-          userEmail: userEmail,
+        // Attempt silent refresh before marking actionRequired
+        final freshToken = await _signInAdapter.getFreshAccessToken(
+          scopes: [searchConsoleReadOnlyScope],
         );
+        if (freshToken != null && freshToken.isNotEmpty) {
+          await _secureStorage.saveGscAccessToken(freshToken);
+        } else {
+          return GscConnectionStatus.actionRequired(
+            message:
+                'Google authorization token has expired. Please re-authorize.',
+            userEmail: userEmail,
+          );
+        }
       }
 
       // Case 3: Need API verification
@@ -294,19 +359,39 @@ class GoogleAuthService {
     try {
       final effectiveClientId =
           clientId ?? await _secureStorage.getGscClientId();
+      final effectiveServerClientId =
+          serverClientId ?? await _secureStorage.getGscServerClientId();
 
-      // 1. Initialize Google Sign-In
+      // On Android, Google Credential Manager requires a Web OAuth Client ID (serverClientId)
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        if (effectiveServerClientId == null ||
+            effectiveServerClientId.trim().isEmpty) {
+          await AppLogger.instance.warning(
+            'GoogleAuthService',
+            'missing_server_client_id',
+            'Attempted Google Sign-In on Android without serverClientId configured.',
+          );
+          return GscConnectionStatus.connectionError(
+            'Google Sign-In failed: serverClientId must be provided on Android. '
+            'Please configure your Web application OAuth Client ID (serverClientId) in Settings > Google Search Console API.',
+          );
+        }
+      }
+
+      // 1. Initialize Google Sign-In exactly once and await completion
       await _signInAdapter.initialize(
         clientId: effectiveClientId,
-        serverClientId: serverClientId,
+        serverClientId: effectiveServerClientId,
       );
 
       // 2. Perform interactive authentication and scope authorization
       final result = await _signInAdapter.authenticateAndAuthorize(
         scopes: [searchConsoleReadOnlyScope],
+        clientId: effectiveClientId,
+        serverClientId: effectiveServerClientId,
       );
 
-      // 3. Persist tokens and identity
+      // 3. Persist tokens and identity safely
       await _secureStorage.saveGscAccessToken(result.accessToken);
       await _secureStorage.saveGscUserEmail(result.email);
       if (result.displayName != null && result.displayName!.isNotEmpty) {
@@ -315,6 +400,10 @@ class GoogleAuthService {
       if (effectiveClientId != null && effectiveClientId.isNotEmpty) {
         await _secureStorage.saveGscClientId(effectiveClientId);
       }
+      if (effectiveServerClientId != null &&
+          effectiveServerClientId.isNotEmpty) {
+        await _secureStorage.saveGscServerClientId(effectiveServerClientId);
+      }
 
       await AppLogger.instance.info(
         'GoogleAuthService',
@@ -322,7 +411,7 @@ class GoogleAuthService {
         'Google account authorized for ${result.email}',
       );
 
-      // 4. Immediately verify with official Search Console REST API
+      // 4. Immediately verify with official Search Console REST API before displaying Connected
       return await verifySearchConsoleAccess();
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) {

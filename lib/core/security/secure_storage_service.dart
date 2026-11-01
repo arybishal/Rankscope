@@ -15,6 +15,7 @@ class SecureStorageService {
   static const String _keyGscAccessToken = 'gsc_access_token';
   static const String _keyGscTokenExpiry = 'gsc_token_expiry';
   static const String _keyGscClientId = 'gsc_client_id';
+  static const String _keyGscServerClientId = 'gsc_server_client_id';
   static const String _keyGscUserEmail = 'gsc_user_email';
   static const String _keyGscUserDisplayName = 'gsc_user_display_name';
   static const String _keyGscLastVerified = 'gsc_last_verified';
@@ -107,11 +108,27 @@ class SecureStorageService {
   }
 
   Future<void> saveGscClientId(String clientId) async {
-    await _safeWrite(_keyGscClientId, clientId);
+    await _safeWrite(_keyGscClientId, clientId.trim());
   }
 
   Future<String?> getGscClientId() async {
     return await _safeRead(_keyGscClientId);
+  }
+
+  Future<void> clearGscClientId() async {
+    await _safeDelete(_keyGscClientId);
+  }
+
+  Future<void> saveGscServerClientId(String serverClientId) async {
+    await _safeWrite(_keyGscServerClientId, serverClientId.trim());
+  }
+
+  Future<String?> getGscServerClientId() async {
+    return await _safeRead(_keyGscServerClientId);
+  }
+
+  Future<void> clearGscServerClientId() async {
+    await _safeDelete(_keyGscServerClientId);
   }
 
   Future<void> saveGscUserEmail(String email) async {
@@ -197,6 +214,8 @@ class SecureStorageService {
     if (gscExpiry != null) creds[_keyGscTokenExpiry] = gscExpiry;
     final gscClient = await getGscClientId();
     if (gscClient != null) creds[_keyGscClientId] = gscClient;
+    final gscServerClient = await getGscServerClientId();
+    if (gscServerClient != null) creds[_keyGscServerClientId] = gscServerClient;
     final gscEmail = await getGscUserEmail();
     if (gscEmail != null) creds[_keyGscUserEmail] = gscEmail;
     final gscName = await getGscUserDisplayName();

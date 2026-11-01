@@ -10,10 +10,12 @@ import '../models/gsc_metric_model.dart';
 class RemoteGscDatasource {
   final http.Client _client;
   final SecureStorageService _secureStorage;
+  final Future<String?> Function()? tokenRefresher;
 
   RemoteGscDatasource({
     http.Client? client,
     SecureStorageService? secureStorage,
+    this.tokenRefresher,
   }) : _client = client ?? http.Client(),
        _secureStorage = secureStorage ?? SecureStorageService();
 
@@ -24,10 +26,21 @@ class RemoteGscDatasource {
     final token = await _getValidAccessToken();
     final url = Uri.parse('$_baseUrl/sites');
 
-    final response = await _client.get(
+    var response = await _client.get(
       url,
       headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
     );
+
+    // If 401 Unauthorized, attempt a single refresh and retry once
+    if (response.statusCode == 401) {
+      final refreshed = await _refreshAccessToken();
+      if (refreshed != null && refreshed.isNotEmpty) {
+        response = await _client.get(
+          url,
+          headers: {'Authorization': 'Bearer $refreshed', 'Accept': 'application/json'},
+        );
+      }
+    }
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body) as Map<String, dynamic>;
@@ -98,7 +111,7 @@ class RemoteGscDatasource {
 
     final body = json.encode(requestPayload);
 
-    final response = await _client.post(
+    var response = await _client.post(
       url,
       headers: {
         'Authorization': 'Bearer $token',
@@ -106,6 +119,21 @@ class RemoteGscDatasource {
       },
       body: body,
     );
+
+    // If 401 Unauthorized, attempt a single refresh and retry once
+    if (response.statusCode == 401) {
+      final refreshed = await _refreshAccessToken();
+      if (refreshed != null && refreshed.isNotEmpty) {
+        response = await _client.post(
+          url,
+          headers: {
+            'Authorization': 'Bearer $refreshed',
+            'Content-Type': 'application/json',
+          },
+          body: body,
+        );
+      }
+    }
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body) as Map<String, dynamic>;
@@ -155,31 +183,46 @@ class RemoteGscDatasource {
 
   Future<String?> _refreshAccessToken() async {
     final refreshToken = await _secureStorage.getGscRefreshToken();
+    final serverClientId = await _secureStorage.getGscServerClientId();
     final clientId = await _secureStorage.getGscClientId();
+    final effectiveClientId = (serverClientId?.isNotEmpty == true)
+        ? serverClientId
+        : clientId;
 
-    if (refreshToken == null || clientId == null) {
-      return null;
+    if (refreshToken != null && effectiveClientId != null) {
+      try {
+        final url = Uri.parse('https://oauth2.googleapis.com/token');
+        final response = await _client.post(
+          url,
+          body: {
+            'client_id': effectiveClientId,
+            'grant_type': 'refresh_token',
+            'refresh_token': refreshToken,
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body) as Map<String, dynamic>;
+          final newAccessToken = data['access_token'] as String;
+          final expiresIn = data['expires_in'] as int? ?? 3600;
+          final expiryEpochMs =
+              DateTime.now().millisecondsSinceEpoch + (expiresIn * 1000);
+
+          await _secureStorage.saveGscAccessToken(newAccessToken, expiryEpochMs);
+          return newAccessToken;
+        }
+      } catch (_) {}
     }
 
-    final url = Uri.parse('https://oauth2.googleapis.com/token');
-    final response = await _client.post(
-      url,
-      body: {
-        'client_id': clientId,
-        'grant_type': 'refresh_token',
-        'refresh_token': refreshToken,
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body) as Map<String, dynamic>;
-      final newAccessToken = data['access_token'] as String;
-      final expiresIn = data['expires_in'] as int? ?? 3600;
-      final expiryEpochMs =
-          DateTime.now().millisecondsSinceEpoch + (expiresIn * 1000);
-
-      await _secureStorage.saveGscAccessToken(newAccessToken, expiryEpochMs);
-      return newAccessToken;
+    final refresher = tokenRefresher;
+    if (refresher != null) {
+      try {
+        final refreshed = await refresher();
+        if (refreshed != null && refreshed.isNotEmpty) {
+          await _secureStorage.saveGscAccessToken(refreshed);
+          return refreshed;
+        }
+      } catch (_) {}
     }
 
     return null;

@@ -41,6 +41,7 @@ class SettingsView extends ConsumerStatefulWidget {
 class _SettingsViewState extends ConsumerState<SettingsView> {
   final _bingKeyController = TextEditingController();
   final _gscClientController = TextEditingController();
+  final _gscServerClientController = TextEditingController();
   final _gscAccessTokenController = TextEditingController();
   final _gscRefreshTokenController = TextEditingController();
   final _yandexTokenController = TextEditingController();
@@ -77,6 +78,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     final storage = ref.read(secureStorageServiceProvider);
     final bingKey = await storage.getBingApiKey();
     final gscClient = await storage.getGscClientId();
+    final gscServerClient = await storage.getGscServerClientId();
     final gscAccess = await storage.getGscAccessToken();
     final gscRefresh = await storage.getGscRefreshToken();
     final gscEmail = await storage.getGscUserEmail();
@@ -86,6 +88,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
       setState(() {
         _bingKeyController.text = bingKey ?? '';
         _gscClientController.text = gscClient ?? '';
+        _gscServerClientController.text = gscServerClient ?? '';
         _gscAccessTokenController.text = gscAccess ?? '';
         _gscRefreshTokenController.text = gscRefresh ?? '';
         _gscUserEmail = gscEmail;
@@ -99,6 +102,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   void dispose() {
     _bingKeyController.dispose();
     _gscClientController.dispose();
+    _gscServerClientController.dispose();
     _gscAccessTokenController.dispose();
     _gscRefreshTokenController.dispose();
     _yandexTokenController.dispose();
@@ -169,13 +173,23 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
 
   Future<void> _saveGscCredentials() async {
     final storage = ref.read(secureStorageServiceProvider);
-    final id = _gscClientController.text.trim();
+    final androidId = _gscClientController.text.trim();
+    final webId = _gscServerClientController.text.trim();
     final token = _gscAccessTokenController.text.trim();
     final refresh = _gscRefreshTokenController.text.trim();
 
-    if (id.isNotEmpty) {
-      await storage.saveGscClientId(id);
+    if (androidId.isNotEmpty) {
+      await storage.saveGscClientId(androidId);
+    } else {
+      await storage.clearGscClientId();
     }
+
+    if (webId.isNotEmpty) {
+      await storage.saveGscServerClientId(webId);
+    } else {
+      await storage.clearGscServerClientId();
+    }
+
     if (token.isNotEmpty) {
       await storage.saveGscAccessToken(token);
     }
@@ -183,7 +197,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
       await storage.saveGscRefreshToken(refresh);
     }
 
-    if (id.isEmpty && token.isEmpty && refresh.isEmpty) {
+    if (androidId.isEmpty && webId.isEmpty && token.isEmpty && refresh.isEmpty) {
       await storage.clearGscCredentials();
     }
 
@@ -206,10 +220,14 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   Future<void> _connectWithGoogle() async {
     setState(() => _isSigningInGoogle = true);
     try {
-      final clientId = _gscClientController.text.trim();
+      final androidId = _gscClientController.text.trim();
+      final webId = _gscServerClientController.text.trim();
       final status = await ref
           .read(gscConnectionStatusProvider.notifier)
-          .connectGoogle(clientId: clientId.isNotEmpty ? clientId : null);
+          .connectGoogle(
+            clientId: androidId.isNotEmpty ? androidId : null,
+            serverClientId: webId.isNotEmpty ? webId : null,
+          );
 
       await _loadStoredCredentials();
 
@@ -262,11 +280,13 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   Future<void> _testGscConnection() async {
     setState(() => _isTestingGscToken = true);
     final storage = ref.read(secureStorageServiceProvider);
-    final id = _gscClientController.text.trim();
+    final androidId = _gscClientController.text.trim();
+    final webId = _gscServerClientController.text.trim();
     final token = _gscAccessTokenController.text.trim();
     final refresh = _gscRefreshTokenController.text.trim();
 
-    if (id.isNotEmpty) await storage.saveGscClientId(id);
+    if (androidId.isNotEmpty) await storage.saveGscClientId(androidId);
+    if (webId.isNotEmpty) await storage.saveGscServerClientId(webId);
     if (token.isNotEmpty) await storage.saveGscAccessToken(token);
     if (refresh.isNotEmpty) await storage.saveGscRefreshToken(refresh);
 
@@ -1509,7 +1529,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
-                                        'Android OAuth Client Setup (Google Cloud Console)',
+                                        'Google Cloud Console OAuth Setup Instructions',
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
@@ -1521,7 +1541,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  'Register an Android OAuth Client in Google Cloud Console. Android clients are authenticated by Google Play Services without needing a Client Secret.',
+                                  'Google Sign-In on Android uses Google Credential Manager, which requires two separate OAuth Client IDs in your Google Cloud project:\n'
+                                  '1. Android Client ID: Identifies this app via package name and signing SHA-1.\n'
+                                  '2. Web application Client ID: Passed as serverClientId to authorize Search Console API scopes.\n'
+                                  'No Client Secret is ever needed in this mobile app.',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
@@ -1570,15 +1593,32 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Note: Current release APK signing matches the debug keystore above. If using a custom production keystore or Google Play App Signing, also register that SHA-1.',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontStyle: FontStyle.italic,
+                                    color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                           const SizedBox(height: AppSpacing.sm),
 
-                          // Client ID input field
+                          // Android Client ID input field
                           const Text(
-                            'OAuth Client ID',
+                            'Android OAuth Client ID',
                             style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'OAuth Client ID created with Application type: Android',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Row(
@@ -1587,7 +1627,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                                 child: TextField(
                                   controller: _gscClientController,
                                   decoration: const InputDecoration(
-                                    hintText: 'your-client-id.apps.googleusercontent.com',
+                                    hintText: 'your-android-client.apps.googleusercontent.com',
                                   ),
                                 ),
                               ),
@@ -1598,15 +1638,61 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                                   final storage = ref.read(secureStorageServiceProvider);
                                   if (id.isNotEmpty) {
                                     await storage.saveGscClientId(id);
-                                    await ref.read(gscConnectionStatusProvider.notifier).refreshStatus();
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('OAuth Client ID saved to Android KeyStore.')),
-                                      );
-                                    }
                                   } else {
-                                    await storage.clearGscCredentials();
-                                    await ref.read(gscConnectionStatusProvider.notifier).refreshStatus();
+                                    await storage.clearGscClientId();
+                                  }
+                                  await ref.read(gscConnectionStatusProvider.notifier).refreshStatus();
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Android OAuth Client ID saved to Android KeyStore.')),
+                                    );
+                                  }
+                                },
+                                child: const Text('Save'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+
+                          // Web OAuth Client ID / Server Client ID input field
+                          const Text(
+                            'Web OAuth Client ID / Server Client ID',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'OAuth Client ID created with Application type: Web application (required on Android as serverClientId)',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _gscServerClientController,
+                                  decoration: const InputDecoration(
+                                    hintText: 'your-web-client.apps.googleusercontent.com',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: () async {
+                                  final id = _gscServerClientController.text.trim();
+                                  final storage = ref.read(secureStorageServiceProvider);
+                                  if (id.isNotEmpty) {
+                                    await storage.saveGscServerClientId(id);
+                                  } else {
+                                    await storage.clearGscServerClientId();
+                                  }
+                                  await ref.read(gscConnectionStatusProvider.notifier).refreshStatus();
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Web OAuth Client ID saved to Android KeyStore.')),
+                                    );
                                   }
                                 },
                                 child: const Text('Save'),

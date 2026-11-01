@@ -15,8 +15,17 @@ export '../../data/services/google_auth_service.dart';
 
 import '../../data/services/google_auth_service.dart';
 
+final googleSignInAdapterProvider = Provider<GoogleSignInAdapter>((ref) {
+  return DefaultGoogleSignInAdapter();
+});
+
 final remoteGscDatasourceProvider = Provider<RemoteGscDatasource>((ref) {
-  return RemoteGscDatasource();
+  final adapter = ref.watch(googleSignInAdapterProvider);
+  return RemoteGscDatasource(
+    tokenRefresher: () => adapter.getFreshAccessToken(
+      scopes: [GoogleAuthService.searchConsoleReadOnlyScope],
+    ),
+  );
 });
 
 final localGscDatasourceProvider = Provider<LocalGscDatasource>((ref) {
@@ -158,6 +167,7 @@ final gscSyncNotifierProvider =
 
 final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {
   return GoogleAuthService(
+    signInAdapter: ref.watch(googleSignInAdapterProvider),
     remoteDatasource: ref.watch(remoteGscDatasourceProvider),
   );
 });

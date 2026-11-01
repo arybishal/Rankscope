@@ -7,6 +7,7 @@ import 'app.dart';
 import 'core/database/app_database.dart';
 import 'core/logging/app_logger.dart';
 import 'core/security/secure_storage_service.dart';
+import 'features/sync/background/sync_workmanager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +41,18 @@ void main() async {
     'app_started',
     'RankScope engine initialized',
   );
+
+  // Initialize Background Sync Scheduler (Android WorkManager)
+  try {
+    await SyncScheduler.instance.initialize();
+    await SyncScheduler.instance.scheduleDailySync();
+  } catch (e) {
+    await AppLogger.instance.warning(
+      'App',
+      'scheduler_init_failed',
+      'Could not initialize sync scheduler: $e',
+    );
+  }
 
   // Check first-time install onboarding completion
   String initialRoute = '/dashboard';

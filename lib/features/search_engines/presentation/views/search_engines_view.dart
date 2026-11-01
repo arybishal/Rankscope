@@ -14,6 +14,7 @@ import '../../../dashboard/presentation/views/dashboard_view.dart'
     hide yandexConfiguredProvider;
 import '../../../keywords/presentation/controllers/keywords_controller.dart';
 import '../../../search_console/presentation/controllers/gsc_controller.dart';
+import '../../../sync/presentation/widgets/sync_dashboard_card.dart';
 import '../../../websites/presentation/controllers/websites_controller.dart';
 import '../../../yandex_webmaster/presentation/controllers/yandex_controller.dart';
 
@@ -195,12 +196,12 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
-          // 1. Website Switcher Header
-          _buildWebsiteHeader(context, isDark),
+          // 1. Unified Engine Sync Dashboard (Auto Sync + Manual Sync All + Metrics)
+          const SyncDashboardCard(),
           const SizedBox(height: AppSpacing.md),
 
-          // 2. Global Sync Banner with Glassmorphic styling
-          _buildGlobalSyncBanner(context, isDark),
+          // 2. Website Switcher Header with Single-Site Sync
+          _buildWebsiteHeader(context, isDark),
           const SizedBox(height: AppSpacing.md),
 
           // 3. Google Search Console Card
@@ -231,101 +232,56 @@ class _SearchEnginesContentState extends ConsumerState<_SearchEnginesContent> {
     return GlassContainer(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
       borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: widget.website.id,
-          isExpanded: true,
-          dropdownColor: isDark ? AppColors.darkCard : AppColors.surfacePrimary,
-          items: widget.allWebsites.map((w) {
-            return DropdownMenuItem<int>(
-              value: w.id,
-              child: Row(
-                children: [
-                  Icon(
-                    w.isCompetitor ? Icons.compare_arrows : Icons.language,
-                    size: 18,
-                    color: w.isCompetitor ? AppColors.rankTop3 : AppColors.accent,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${w.label} (${w.domain})',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-          onChanged: (newId) {
-            if (newId != null && newId != widget.website.id) {
-              ref.read(selectedWebsiteIdProvider.notifier).select(newId);
-            }
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlobalSyncBanner(BuildContext context, bool isDark) {
-    return GlassContainer(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: (isDark ? const Color(0xFF60A5FA) : AppColors.accent).withAlpha(25),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.sync,
-              size: 22,
-              color: isDark ? const Color(0xFF60A5FA) : AppColors.accent,
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Unified Engine Sync',
-                  style: AppTextStyles.labelLarge.copyWith(
-                    color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Fetch queries and ranking observations from all connected APIs.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
-                  ),
-                ),
-              ],
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: widget.website.id,
+                isExpanded: true,
+                dropdownColor: isDark ? AppColors.darkCard : AppColors.surfacePrimary,
+                items: widget.allWebsites.map((w) {
+                  return DropdownMenuItem<int>(
+                    value: w.id,
+                    child: Row(
+                      children: [
+                        Icon(
+                          w.isCompetitor ? Icons.compare_arrows : Icons.language,
+                          size: 18,
+                          color: w.isCompetitor ? AppColors.rankTop3 : AppColors.accent,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${w.label} (${w.domain})',
+                            style: AppTextStyles.labelLarge.copyWith(
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (newId) {
+                  if (newId != null && newId != widget.website.id) {
+                    ref.read(selectedWebsiteIdProvider.notifier).select(newId);
+                  }
+                },
+              ),
             ),
           ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isDark ? const Color(0xFF2563EB) : AppColors.accent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            ),
+          const SizedBox(width: 4),
+          IconButton(
             icon: widget.isSyncingAll
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
                   )
-                : const Icon(Icons.refresh, size: 16),
-            label: Text(widget.isSyncingAll ? 'Syncing...' : 'Sync All'),
+                : const Icon(Icons.refresh, size: 20),
+            tooltip: 'Sync this website only',
             onPressed: widget.isSyncingAll ? null : widget.onSyncAll,
           ),
         ],

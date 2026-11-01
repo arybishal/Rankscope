@@ -213,11 +213,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Scroll to bottom
-      await tester.drag(find.byType(ListView), const Offset(0, -800));
-      await tester.pumpAndSettle();
-      await tester.drag(find.byType(ListView), const Offset(0, -800));
-      await tester.pumpAndSettle();
-      await tester.drag(find.byType(ListView), const Offset(0, -800));
+      await tester.scrollUntilVisible(
+        find.text('ABOUT & DEVELOPER'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('ABOUT & DEVELOPER'), findsOneWidget);

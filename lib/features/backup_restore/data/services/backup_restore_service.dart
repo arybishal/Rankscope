@@ -78,6 +78,12 @@ class BackupRestoreService {
     } catch (_) {
       // Table may not exist on pre-v5 schemas
     }
+    List<Map<String, dynamic>> syncHistory = [];
+    try {
+      syncHistory = await db.query(
+        DatabaseConstants.tableSyncHistory,
+      );
+    } catch (_) {}
     final List<Map<String, dynamic>> compLinks = await db.query(
       DatabaseConstants.tableCompetitorKeywordLinks,
     );
@@ -115,6 +121,7 @@ class BackupRestoreService {
         'gsc_search_analytics': gscRecords,
         'bing_search_analytics': bingRecords,
         'yandex_search_analytics': yandexRecords,
+        'sync_history': syncHistory,
         'competitor_keyword_links': compLinks,
         'reports_history': reportsHistory,
         'credentials': credentials,
@@ -399,6 +406,15 @@ class BackupRestoreService {
         for (final row in reports) {
           await txn.insert(DatabaseConstants.tableReportsHistory, row);
         }
+
+        // Repopulate sync history
+        final syncHistory = (data['sync_history'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
+        for (final row in syncHistory) {
+          try {
+            await txn.insert(DatabaseConstants.tableSyncHistory, row);
+          } catch (_) {}
+        }
       });
 
       // Restore credentials
@@ -646,6 +662,24 @@ class BackupRestoreService {
             conflictAlgorithm: ConflictAlgorithm.ignore,
           );
           if (id > 0) rankRecordsAdded++;
+        } catch (_) {}
+      }
+
+      // Merge Sync History
+      final syncHistory = (data['sync_history'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
+      for (final row in syncHistory) {
+        final insertMap = Map<String, dynamic>.from(row)..remove('id');
+        final oldWebId = row['website_id'] as int?;
+        if (oldWebId != null && websiteIdMap.containsKey(oldWebId)) {
+          insertMap['website_id'] = websiteIdMap[oldWebId];
+        }
+        try {
+          await txn.insert(
+            DatabaseConstants.tableSyncHistory,
+            insertMap,
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
         } catch (_) {}
       }
     });

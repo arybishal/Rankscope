@@ -109,8 +109,12 @@ class SearchPerformanceSyncService {
     String? country,
     String? device,
     String? searchType,
+    int? dateWindowDays,
   }) async {
     final db = await _dbManager.database;
+
+    final windowDays =
+        dateWindowDays ?? await _secureStorage.getAutoSyncDateWindowDays();
 
     // Lookup website record to ensure we use exact verified properties
     final siteRows = await db.query(
@@ -142,9 +146,9 @@ class SearchPerformanceSyncService {
         final now = DateTime.now();
         final endDate =
             "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-        final startDate30 = now.subtract(const Duration(days: 30));
+        final startDateWindow = now.subtract(Duration(days: windowDays));
         final startDate =
-            "${startDate30.year}-${startDate30.month.toString().padLeft(2, '0')}-${startDate30.day.toString().padLeft(2, '0')}";
+            "${startDateWindow.year}-${startDateWindow.month.toString().padLeft(2, '0')}-${startDateWindow.day.toString().padLeft(2, '0')}";
 
         // If GSC property not mapped yet, attempt auto-discovery from verified sites
         if (effectiveGscProp == null || effectiveGscProp.isEmpty) {
@@ -276,9 +280,9 @@ class SearchPerformanceSyncService {
           final now = DateTime.now();
           final endDate =
               "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-          final startDate30 = now.subtract(const Duration(days: 30));
+          final startDateWindow = now.subtract(Duration(days: windowDays));
           final startDate =
-              "${startDate30.year}-${startDate30.month.toString().padLeft(2, '0')}-${startDate30.day.toString().padLeft(2, '0')}";
+              "${startDateWindow.year}-${startDateWindow.month.toString().padLeft(2, '0')}-${startDateWindow.day.toString().padLeft(2, '0')}";
 
           final yCount = await _yandexRepository.syncMetricsFromApi(
             websiteId: websiteId,

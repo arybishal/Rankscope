@@ -20,6 +20,7 @@ import 'package:rankscope/features/keywords/presentation/controllers/keywords_co
 import 'package:rankscope/features/search_console/presentation/controllers/gsc_controller.dart';
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
 import 'package:rankscope/features/yandex_webmaster/presentation/controllers/yandex_controller.dart';
+import 'package:rankscope/features/sync/presentation/controllers/sync_controller.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -1162,6 +1163,226 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                       ],
                     ),
                   ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // Automatic & Background Sync
+                const Text(
+                  'AUTOMATIC & BACKGROUND SYNC',
+                  style: AppTextStyles.labelSmall,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final syncState = ref.watch(syncControllerProvider);
+                    final syncCtrl = ref.read(syncControllerProvider.notifier);
+                    final timeStr = DateFormat('h:mm a').format(
+                      DateTime(2026, 1, 1, syncState.autoSyncHour, syncState.autoSyncMinute),
+                    );
+
+                    return Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent.withAlpha(25),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Icon(
+                                  Icons.sync,
+                                  size: 18,
+                                  color: AppColors.accent,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Daily Scheduled Sync',
+                                  style: AppTextStyles.labelLarge,
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: syncState.autoSyncEnabled,
+                                activeTrackColor: AppColors.accent,
+                                onChanged: (val) => syncCtrl.toggleAutoSync(val),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Automatically queries all active websites and connected engines (Google, Bing, Yandex) once daily using Android WorkManager.',
+                            style: AppTextStyles.bodySmall,
+                          ),
+                          if (syncState.autoSyncEnabled) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            const Divider(height: 1),
+                            const SizedBox(height: AppSpacing.md),
+
+                            // Configurable Sync Time
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Sync Time (Local Time)', style: AppTextStyles.labelMedium),
+                                      Text(
+                                        'Device timezone: ${DateTime.now().timeZoneName}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  icon: const Icon(Icons.access_time, size: 16),
+                                  label: Text(timeStr),
+                                  onPressed: () async {
+                                    final picked = await showTimePicker(
+                                      context: context,
+                                      initialTime: TimeOfDay(
+                                        hour: syncState.autoSyncHour,
+                                        minute: syncState.autoSyncMinute,
+                                      ),
+                                    );
+                                    if (picked != null) {
+                                      await syncCtrl.updateScheduleTime(picked.hour, picked.minute);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: AppSpacing.md),
+
+                            // Configurable Date Window
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Historical Date Window', style: AppTextStyles.labelMedium),
+                                      Text(
+                                        'Days of queries to refresh (accounts for Search Console data latency)',
+                                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                DropdownButton<int>(
+                                  value: syncState.dateWindowDays,
+                                  dropdownColor: isDark ? AppColors.darkCard : AppColors.surfacePrimary,
+                                  items: const [
+                                    DropdownMenuItem(value: 7, child: Text('7 Days')),
+                                    DropdownMenuItem(value: 14, child: Text('14 Days')),
+                                    DropdownMenuItem(value: 30, child: Text('30 Days')),
+                                    DropdownMenuItem(value: 60, child: Text('60 Days')),
+                                    DropdownMenuItem(value: 90, child: Text('90 Days')),
+                                  ],
+                                  onChanged: (days) {
+                                    if (days != null) syncCtrl.updateDateWindowDays(days);
+                                  },
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: AppSpacing.sm),
+
+                            // Next Sync Indicator
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: (isDark ? Colors.amber.shade300 : Colors.amber.shade700).withAlpha(20),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 14,
+                                    color: isDark ? Colors.amber.shade300 : Colors.amber.shade700,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      syncState.nextScheduledSync != null
+                                          ? 'Next run: ${DateFormat('EEE, MMM d at h:mm a').format(syncState.nextScheduledSync!)}'
+                                          : 'Schedule active (network required)',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+
+                          const SizedBox(height: AppSpacing.md),
+
+                          // Trigger manual sync now button
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              icon: syncState.isSyncing
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                                    )
+                                  : const Icon(Icons.sync, size: 16),
+                              label: Text(syncState.isSyncing ? 'Syncing...' : 'Sync All Websites Now'),
+                              onPressed: syncState.isSyncing
+                                  ? null
+                                  : () async {
+                                      try {
+                                        final res = await syncCtrl.syncAllNow();
+                                        if (res != null && context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(res.overallMessage),
+                                              backgroundColor: res.hasFailures
+                                                  ? AppColors.rankDrop
+                                                  : AppColors.rankGain,
+                                            ),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Sync error: $e'),
+                                              backgroundColor: AppColors.rankDrop,
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    },
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.lg),
 

@@ -18,6 +18,7 @@ import 'package:rankscope/features/keywords/presentation/views/keyword_details_v
 import 'package:rankscope/features/reporting/data/generators/csv_report_generator.dart';
 import 'package:rankscope/features/reporting/data/generators/pdf_report_generator.dart';
 import 'package:rankscope/features/search_console/presentation/controllers/gsc_controller.dart';
+import 'package:rankscope/features/sync/presentation/controllers/sync_controller.dart';
 import 'package:rankscope/features/websites/presentation/controllers/websites_controller.dart';
 import 'package:rankscope/shared/widgets/cards/rank_metric_card.dart';
 import 'package:rankscope/shared/widgets/charts/trend_line_chart.dart';
@@ -60,6 +61,47 @@ class DashboardView extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('RankScope', style: AppTextStyles.titleLarge),
         actions: [
+          Consumer(
+            builder: (context, ref, _) {
+              final syncState = ref.watch(syncControllerProvider);
+              return IconButton(
+                icon: syncState.isSyncing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                      )
+                    : Icon(
+                        Icons.sync,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                      ),
+                tooltip: syncState.isSyncing ? 'Syncing...' : 'Sync All Engines Now',
+                onPressed: syncState.isSyncing
+                    ? null
+                    : () async {
+                        try {
+                          final res = await ref.read(syncControllerProvider.notifier).syncAllNow();
+                          if (res != null && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(res.overallMessage),
+                                backgroundColor: res.hasFailures
+                                    ? AppColors.rankDrop
+                                    : AppColors.rankGain,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Sync failed: $e'), backgroundColor: AppColors.rankDrop),
+                            );
+                          }
+                        }
+                      },
+              );
+            },
+          ),
           IconButton(
             icon: Icon(
               Icons.language_outlined,

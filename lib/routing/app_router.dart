@@ -11,6 +11,7 @@ import '../features/search_console/presentation/views/search_console_view.dart';
 import '../features/search_engines/presentation/views/search_engines_view.dart';
 import '../features/settings/presentation/views/logs_view.dart';
 import '../features/settings/presentation/views/settings_view.dart';
+import '../features/sync/presentation/views/sync_history_view.dart';
 import '../features/websites/presentation/views/websites_management_view.dart';
 import '../features/yandex_webmaster/presentation/views/yandex_webmaster_view.dart';
 import 'navigation_shell.dart';
@@ -54,6 +55,11 @@ GoRouter createAppRouter({String initialLocation = '/dashboard'}) => GoRouter(
       path: '/yandex-webmaster',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const YandexWebmasterView(),
+    ),
+    GoRoute(
+      path: '/sync-history',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const SyncHistoryView(),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {

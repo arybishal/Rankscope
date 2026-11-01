@@ -1,5 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../features/sync/domain/models/sync_models.dart';
+
 /// Secure hardware-backed storage for API keys and OAuth tokens using Android KeyStore.
 class SecureStorageService {
   final FlutterSecureStorage _storage;
@@ -24,6 +26,13 @@ class SecureStorageService {
   static const String _keyYandexClientId = 'yandex_client_id';
   static const String _keyHasCompletedOnboarding = 'has_completed_onboarding';
   static const String _keyThemeMode = 'app_theme_mode';
+  static const String _keyAutoSyncEnabled = 'auto_sync_enabled';
+  static const String _keyAutoSyncHour = 'auto_sync_hour';
+  static const String _keyAutoSyncMinute = 'auto_sync_minute';
+  static const String _keyAutoSyncDateWindowDays = 'auto_sync_date_window_days';
+  static const String _keyLastSyncEpochMs = 'last_sync_epoch_ms';
+  static const String _keyLastSyncStatus = 'last_sync_status';
+  static const String _keyLastSyncSummaryJson = 'last_sync_summary_json';
 
   // --- Safe Read & Write Helpers ---
 
@@ -202,6 +211,94 @@ class SecureStorageService {
     await _safeDelete(_keyYandexClientId);
   }
 
+  // --- Auto Sync Preferences & State ---
+
+  Future<void> setAutoSyncEnabled(bool enabled) async {
+    await _safeWrite(_keyAutoSyncEnabled, enabled ? 'true' : 'false');
+  }
+
+  Future<bool> getAutoSyncEnabled() async {
+    final val = await _safeRead(_keyAutoSyncEnabled);
+    if (val == null) return true; // Default enabled
+    return val == 'true';
+  }
+
+  Future<void> setAutoSyncHour(int hour) async {
+    await _safeWrite(_keyAutoSyncHour, hour.toString());
+  }
+
+  Future<int> getAutoSyncHour() async {
+    final val = await _safeRead(_keyAutoSyncHour);
+    if (val == null) return 8; // Default 8:00 AM
+    return int.tryParse(val) ?? 8;
+  }
+
+  Future<void> setAutoSyncMinute(int minute) async {
+    await _safeWrite(_keyAutoSyncMinute, minute.toString());
+  }
+
+  Future<int> getAutoSyncMinute() async {
+    final val = await _safeRead(_keyAutoSyncMinute);
+    if (val == null) return 0;
+    return int.tryParse(val) ?? 0;
+  }
+
+  Future<void> setAutoSyncDateWindowDays(int days) async {
+    await _safeWrite(_keyAutoSyncDateWindowDays, days.toString());
+  }
+
+  Future<int> getAutoSyncDateWindowDays() async {
+    final val = await _safeRead(_keyAutoSyncDateWindowDays);
+    if (val == null) return 30; // Default 30 days
+    return int.tryParse(val) ?? 30;
+  }
+
+  Future<void> setLastSyncEpochMs(int epochMs) async {
+    await _safeWrite(_keyLastSyncEpochMs, epochMs.toString());
+  }
+
+  Future<int?> getLastSyncEpochMs() async {
+    final val = await _safeRead(_keyLastSyncEpochMs);
+    if (val == null) return null;
+    return int.tryParse(val);
+  }
+
+  Future<void> setLastSyncStatus(String status) async {
+    await _safeWrite(_keyLastSyncStatus, status);
+  }
+
+  Future<String?> getLastSyncStatus() async {
+    return await _safeRead(_keyLastSyncStatus);
+  }
+
+  Future<void> saveLastSyncSummary(SyncSummary summary) async {
+    await _safeWrite(_keyLastSyncSummaryJson, summary.toJson());
+    await setLastSyncEpochMs(summary.completedAt.millisecondsSinceEpoch);
+    await setLastSyncStatus(summary.status);
+  }
+
+  Future<SyncSummary?> getLastSyncSummary() async {
+    final jsonStr = await _safeRead(_keyLastSyncSummaryJson);
+    if (jsonStr == null || jsonStr.trim().isEmpty) return null;
+    try {
+      return SyncSummary.fromJson(jsonStr);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  DateTime calculateNextSyncTime({int? hour, int? minute, DateTime? from}) {
+    final now = from ?? DateTime.now();
+    final h = hour ?? 8;
+    final m = minute ?? 0;
+    final scheduledToday = DateTime(now.year, now.month, now.day, h, m);
+    if (scheduledToday.isAfter(now)) {
+      return scheduledToday;
+    } else {
+      return scheduledToday.add(const Duration(days: 1));
+    }
+  }
+
   // --- Backup & Restore of Stored Credentials ---
 
   Future<Map<String, String>> getAllCredentials() async {
@@ -230,6 +327,14 @@ class SecureStorageService {
     if (yandexClient != null) creds[_keyYandexClientId] = yandexClient;
     final theme = await getThemeMode();
     if (theme != null) creds[_keyThemeMode] = theme;
+    final autoSync = await _safeRead(_keyAutoSyncEnabled);
+    if (autoSync != null) creds[_keyAutoSyncEnabled] = autoSync;
+    final autoHour = await _safeRead(_keyAutoSyncHour);
+    if (autoHour != null) creds[_keyAutoSyncHour] = autoHour;
+    final autoMin = await _safeRead(_keyAutoSyncMinute);
+    if (autoMin != null) creds[_keyAutoSyncMinute] = autoMin;
+    final dateWindow = await _safeRead(_keyAutoSyncDateWindowDays);
+    if (dateWindow != null) creds[_keyAutoSyncDateWindowDays] = dateWindow;
     return creds;
   }
 

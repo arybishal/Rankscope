@@ -36,6 +36,8 @@ class _FakeKeywordsRepository implements KeywordsRepository {
     bool? isActive,
     String? searchEngine,
     String? tag,
+    int? groupId,
+    bool onlyUngrouped = false,
   }) async => [];
 
   @override
@@ -70,6 +72,12 @@ class _FakeKeywordsRepository implements KeywordsRepository {
 
   @override
   Future<void> toggleActiveStatus(int id, bool isActive) async {}
+
+  @override
+  Future<void> updateKeywordGroup(int keywordId, int? groupId) async {}
+
+  @override
+  Future<void> assignKeywordsToGroup(List<int> keywordIds, int? groupId) async {}
 
   @override
   Future<RankObservation> recordObservation(RankObservation observation) async => observation;

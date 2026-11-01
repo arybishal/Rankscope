@@ -19,6 +19,8 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
     bool? isActive,
     String? searchEngine,
     String? tag,
+    int? groupId,
+    bool onlyUngrouped = false,
   }) async {
     try {
       return await _localDatasource.getKeywordsByWebsite(
@@ -26,6 +28,8 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
         isActive: isActive,
         searchEngine: searchEngine,
         tag: tag,
+        groupId: groupId,
+        onlyUngrouped: onlyUngrouped,
       );
     } catch (e) {
       throw DatabaseFailure(
@@ -144,6 +148,24 @@ class KeywordsRepositoryImpl implements KeywordsRepository {
       await _localDatasource.toggleActiveStatus(keywordId, isActive);
     } catch (e) {
       throw DatabaseFailure('Failed to toggle keyword status: $e');
+    }
+  }
+
+  @override
+  Future<void> updateKeywordGroup(int keywordId, int? groupId) async {
+    try {
+      await _localDatasource.updateKeywordGroup(keywordId, groupId);
+    } catch (e) {
+      throw DatabaseFailure('Failed to update keyword group: $e');
+    }
+  }
+
+  @override
+  Future<void> assignKeywordsToGroup(List<int> keywordIds, int? groupId) async {
+    try {
+      await _localDatasource.assignKeywordsToGroup(keywordIds, groupId);
+    } catch (e) {
+      throw DatabaseFailure('Failed to assign keywords to group: $e');
     }
   }
 

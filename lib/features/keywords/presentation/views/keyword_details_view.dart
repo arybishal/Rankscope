@@ -12,6 +12,7 @@ import '../../../../shared/widgets/cards/ranking_badge.dart';
 import '../../../../shared/widgets/charts/trend_line_chart.dart';
 import '../../../../shared/widgets/dialogs/add_keyword_dialog.dart';
 import '../../../../shared/widgets/dialogs/log_rank_dialog.dart';
+import '../../../../shared/widgets/dialogs/move_keyword_group_dialog.dart';
 import '../../../websites/domain/entities/website.dart';
 import '../controllers/keywords_controller.dart';
 
@@ -30,6 +31,18 @@ class KeywordDetailsView extends ConsumerStatefulWidget {
 }
 
 enum _TimeRange { sevenDays, thirtyDays, ninetyDays, all }
+
+Color _parseHex(String? hexString, {Color fallback = const Color(0xFF2563EB)}) {
+  if (hexString == null || hexString.isEmpty) return fallback;
+  final buffer = StringBuffer();
+  if (hexString.length == 6 || hexString.length == 7) buffer.write('ff');
+  buffer.write(hexString.replaceFirst('#', ''));
+  try {
+    return Color(int.parse(buffer.toString(), radix: 16));
+  } catch (_) {
+    return fallback;
+  }
+}
 
 class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
   _TimeRange _timeRange = _TimeRange.thirtyDays;
@@ -127,6 +140,21 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.drive_file_move_outlined),
+            tooltip: 'Move to Group',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => MoveKeywordGroupDialog(
+                  websiteId: widgetWebsiteId,
+                  keywordIds: [keyword.id!],
+                  keywordSummaryText: keyword.keywordText,
+                  currentGroupId: keyword.groupId,
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.edit_outlined),
             tooltip: 'Edit Keyword',
             onPressed: () => _openEditDialog(context, keyword),
@@ -200,6 +228,42 @@ class _KeywordDetailsViewState extends ConsumerState<KeywordDetailsView> {
                 const _StatusPill(label: 'LOST', color: AppColors.rankDrop),
               if (keyword.isRecovered)
                 const _StatusPill(label: 'RECOVERED', color: Color(0xFF16A34A)),
+              if (keyword.groupId != null)
+                ref.watch(keywordGroupsFamilyProvider(widgetWebsiteId)).maybeWhen(
+                  data: (groups) {
+                    final match = groups.where((g) => g.id == keyword.groupId);
+                    if (match.isEmpty) return const SizedBox.shrink();
+                    final g = match.first;
+                    final color = _parseHex(g.colorHex);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            g.name,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  orElse: () => const SizedBox.shrink(),
+                ),
               Text(
                 '• ${keyword.targetCountry} • ${keyword.device}',
                 style: AppTextStyles.bodySmall.copyWith(

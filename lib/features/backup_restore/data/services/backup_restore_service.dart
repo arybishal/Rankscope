@@ -84,6 +84,18 @@ class BackupRestoreService {
         DatabaseConstants.tableSyncHistory,
       );
     } catch (_) {}
+    List<Map<String, dynamic>> keywordGroups = [];
+    try {
+      keywordGroups = await db.query(
+        DatabaseConstants.tableKeywordGroups,
+      );
+    } catch (_) {}
+    List<Map<String, dynamic>> rankingAlerts = [];
+    try {
+      rankingAlerts = await db.query(
+        DatabaseConstants.tableRankingAlerts,
+      );
+    } catch (_) {}
     final List<Map<String, dynamic>> compLinks = await db.query(
       DatabaseConstants.tableCompetitorKeywordLinks,
     );
@@ -111,11 +123,15 @@ class BackupRestoreService {
         'gsc_records_count': gscRecords.length,
         'bing_records_count': bingRecords.length,
         'yandex_records_count': yandexRecords.length,
+        'keyword_groups_count': keywordGroups.length,
+        'ranking_alerts_count': rankingAlerts.length,
         'integrations_count': credentials.length,
       },
       'data': {
         'websites': websites,
         'keywords': keywords,
+        'keyword_groups': keywordGroups,
+        'ranking_alerts': rankingAlerts,
         'manual_rank_records': manualRecords,
         'rank_observations': rankObservations,
         'gsc_search_analytics': gscRecords,
@@ -284,6 +300,8 @@ class BackupRestoreService {
     final gscRecords = data['gsc_search_analytics'] as List? ?? [];
     final bingRecords = data['bing_search_analytics'] as List? ?? [];
     final yandexRecords = data['yandex_search_analytics'] as List? ?? [];
+    final keywordGroups = data['keyword_groups'] as List? ?? [];
+    final rankingAlerts = data['ranking_alerts'] as List? ?? [];
     final credentials = data['credentials'] as Map<String, dynamic>? ?? {};
 
     return {
@@ -293,6 +311,8 @@ class BackupRestoreService {
           payload['credentials_included'] ?? (credentials.isNotEmpty),
       'websites_count': websites.length,
       'keywords_count': keywords.length,
+      'keyword_groups_count': keywordGroups.length,
+      'ranking_alerts_count': rankingAlerts.length,
       'ranking_records_count':
           manualRecords.length +
           gscRecords.length +
@@ -337,9 +357,15 @@ class BackupRestoreService {
         try {
           await txn.delete(DatabaseConstants.tableYandexSearchAnalytics);
         } catch (_) {}
+        try {
+          await txn.delete(DatabaseConstants.tableRankingAlerts);
+        } catch (_) {}
         await txn.delete(DatabaseConstants.tableRankObservations);
         await txn.delete(DatabaseConstants.tableManualRankRecords);
         await txn.delete(DatabaseConstants.tableKeywords);
+        try {
+          await txn.delete(DatabaseConstants.tableKeywordGroups);
+        } catch (_) {}
         await txn.delete(DatabaseConstants.tableWebsites);
 
         // Repopulate websites
@@ -349,11 +375,29 @@ class BackupRestoreService {
           await txn.insert(DatabaseConstants.tableWebsites, row);
         }
 
+        // Repopulate keyword groups
+        final kwGroups = (data['keyword_groups'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
+        for (final row in kwGroups) {
+          try {
+            await txn.insert(DatabaseConstants.tableKeywordGroups, row);
+          } catch (_) {}
+        }
+
         // Repopulate keywords
         final keywords = (data['keywords'] as List? ?? [])
             .cast<Map<String, dynamic>>();
         for (final row in keywords) {
           await txn.insert(DatabaseConstants.tableKeywords, row);
+        }
+
+        // Repopulate ranking alerts
+        final rankingAlerts = (data['ranking_alerts'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
+        for (final row in rankingAlerts) {
+          try {
+            await txn.insert(DatabaseConstants.tableRankingAlerts, row);
+          } catch (_) {}
         }
 
         // Repopulate manual rank records
@@ -503,6 +547,38 @@ class BackupRestoreService {
         }
       }
 
+      // 1b. Merge Keyword Groups
+      final Map<int, int> groupIdMap = {};
+      final groups = (data['keyword_groups'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
+      for (final grpRow in groups) {
+        final oldGrpId = grpRow['id'] as int;
+        final oldSiteId = grpRow['website_id'] as int;
+        final mappedSiteId = websiteIdMap[oldSiteId];
+        if (mappedSiteId == null) continue;
+
+        final name = grpRow['name'] as String;
+        final existing = await txn.query(
+          DatabaseConstants.tableKeywordGroups,
+          where: 'website_id = ? AND name = ?',
+          whereArgs: [mappedSiteId, name],
+          limit: 1,
+        );
+
+        if (existing.isNotEmpty) {
+          groupIdMap[oldGrpId] = existing.first['id'] as int;
+        } else {
+          final insertMap = Map<String, dynamic>.from(grpRow)
+            ..remove('id')
+            ..['website_id'] = mappedSiteId;
+          final newId = await txn.insert(
+            DatabaseConstants.tableKeywordGroups,
+            insertMap,
+          );
+          groupIdMap[oldGrpId] = newId;
+        }
+      }
+
       // 2. Merge Keywords
       // Map: old backup keyword ID -> new/existing keyword ID
       final Map<int, int> keywordIdMap = {};
@@ -545,6 +621,9 @@ class BackupRestoreService {
           final insertMap = Map<String, dynamic>.from(kwRow)
             ..remove('id')
             ..['website_id'] = mappedSiteId;
+          if (kwRow['group_id'] != null) {
+            insertMap['group_id'] = groupIdMap[kwRow['group_id']];
+          }
           final newKwId = await txn.insert(
             DatabaseConstants.tableKeywords,
             insertMap,
@@ -677,6 +756,30 @@ class BackupRestoreService {
         try {
           await txn.insert(
             DatabaseConstants.tableSyncHistory,
+            insertMap,
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+        } catch (_) {}
+      }
+
+      // Merge Ranking Alerts
+      final alerts = (data['ranking_alerts'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
+      for (final alertRow in alerts) {
+        final oldSiteId = alertRow['website_id'] as int;
+        final mappedSiteId = websiteIdMap[oldSiteId];
+        if (mappedSiteId == null) continue;
+
+        final oldKwId = alertRow['keyword_id'] as int?;
+        final mappedKwId = oldKwId != null ? keywordIdMap[oldKwId] : null;
+
+        final insertMap = Map<String, dynamic>.from(alertRow)
+          ..remove('id')
+          ..['website_id'] = mappedSiteId
+          ..['keyword_id'] = mappedKwId;
+        try {
+          await txn.insert(
+            DatabaseConstants.tableRankingAlerts,
             insertMap,
             conflictAlgorithm: ConflictAlgorithm.ignore,
           );

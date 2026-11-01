@@ -35,6 +35,7 @@ class _AddKeywordDialogState extends ConsumerState<AddKeywordDialog> {
   late String _country;
   late String _device;
   late bool _isActive;
+  int? _selectedGroupId;
   bool _showAdvanced = false;
   bool _isSubmitting = false;
 
@@ -69,6 +70,7 @@ class _AddKeywordDialogState extends ConsumerState<AddKeywordDialog> {
     _country = kw?.targetCountry ?? 'GLOBAL';
     _device = kw?.device ?? 'Desktop';
     _isActive = kw?.isActive ?? true;
+    _selectedGroupId = kw?.groupId;
 
     if (_cityController.text.isNotEmpty ||
         _tagsController.text.isNotEmpty ||
@@ -121,6 +123,7 @@ class _AddKeywordDialogState extends ConsumerState<AddKeywordDialog> {
           language: language,
           device: _device,
           tags: tags,
+          groupId: _selectedGroupId,
           isActive: _isActive,
         );
 
@@ -150,6 +153,7 @@ class _AddKeywordDialogState extends ConsumerState<AddKeywordDialog> {
               language: language,
               device: _device,
               tags: tags,
+              groupId: _selectedGroupId,
               isActive: _isActive,
             );
 
@@ -319,6 +323,71 @@ class _AddKeywordDialogState extends ConsumerState<AddKeywordDialog> {
                   label: 'Target Landing Page (Optional)',
                   hintText:
                       'e.g. /services/flutter or https://example.com/blog',
+                ),
+                const SizedBox(height: AppSpacing.md),
+
+                // Keyword Group Selector
+                const Text(
+                  'Keyword Group (Optional)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ref.watch(keywordGroupsFamilyProvider(widget.websiteId)).when(
+                  loading: () => const LinearProgressIndicator(),
+                  error: (err, stack) => const SizedBox.shrink(),
+                  data: (groups) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfacePrimary,
+                        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                        border: Border.all(color: AppColors.borderSubtle),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          value: _selectedGroupId,
+                          isExpanded: true,
+                          dropdownColor: AppColors.surfacePrimary,
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text(
+                                'No Group (Ungrouped)',
+                                style: AppTextStyles.bodyMedium,
+                              ),
+                            ),
+                            ...groups.map(
+                              (g) => DropdownMenuItem<int?>(
+                                value: g.id,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: _parseHexColor(g.colorHex),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(g.name, style: AppTextStyles.bodyMedium),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) => setState(() => _selectedGroupId = val),
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.sm),
 
@@ -524,5 +593,17 @@ class _EngineSelectCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Color _parseHexColor(String? hexString, {Color fallback = const Color(0xFF2563EB)}) {
+  if (hexString == null || hexString.isEmpty) return fallback;
+  final buffer = StringBuffer();
+  if (hexString.length == 6 || hexString.length == 7) buffer.write('ff');
+  buffer.write(hexString.replaceFirst('#', ''));
+  try {
+    return Color(int.parse(buffer.toString(), radix: 16));
+  } catch (_) {
+    return fallback;
   }
 }

@@ -438,6 +438,8 @@ class _TestKeywordsRepository implements KeywordsRepository {
     bool? isActive,
     String? searchEngine,
     String? tag,
+    int? groupId,
+    bool onlyUngrouped = false,
   }) async {
     return _keywords.where((k) => k.websiteId == websiteId).toList();
   }
@@ -471,6 +473,12 @@ class _TestKeywordsRepository implements KeywordsRepository {
 
   @override
   Future<void> toggleActiveStatus(int keywordId, bool isActive) async {}
+
+  @override
+  Future<void> updateKeywordGroup(int keywordId, int? groupId) async {}
+
+  @override
+  Future<void> assignKeywordsToGroup(List<int> keywordIds, int? groupId) async {}
 
   @override
   Future<void> deleteKeyword(int id) async {}

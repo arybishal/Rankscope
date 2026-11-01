@@ -7,6 +7,7 @@ import 'migrations/m003_keyword_intelligence.dart';
 import 'migrations/m004_search_performance_sync.dart';
 import 'migrations/m005_add_yandex_webmaster.dart';
 import 'migrations/m006_add_sync_history.dart';
+import 'migrations/m007_keyword_intelligence_groups_alerts.dart';
 
 /// Registry and orchestrator for database migrations.
 class DatabaseMigrations {
@@ -19,6 +20,7 @@ class DatabaseMigrations {
     4: M004SearchPerformanceSync(),
     5: M005AddYandexWebmaster(),
     6: M006AddSyncHistory(),
+    7: M007KeywordIntelligenceGroupsAlerts(),
   };
 
   /// Executes all migrations needed to bring the database to target version.

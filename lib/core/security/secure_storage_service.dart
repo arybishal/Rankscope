@@ -1,6 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../features/sync/domain/models/sync_models.dart';
+import '../../features/keywords/domain/models/alert_settings.dart';
 
 /// Secure hardware-backed storage for API keys and OAuth tokens using Android KeyStore.
 class SecureStorageService {
@@ -33,6 +34,17 @@ class SecureStorageService {
   static const String _keyLastSyncEpochMs = 'last_sync_epoch_ms';
   static const String _keyLastSyncStatus = 'last_sync_status';
   static const String _keyLastSyncSummaryJson = 'last_sync_summary_json';
+  static const String _keyAlertRankGainThreshold = 'alert_rank_gain_threshold';
+  static const String _keyAlertRankDropThreshold = 'alert_rank_drop_threshold';
+  static const String _keyAlertRankGainEnabled = 'alert_rank_gain_enabled';
+  static const String _keyAlertRankDropEnabled = 'alert_rank_drop_enabled';
+  static const String _keyAlertNewQueryEnabled = 'alert_new_query_enabled';
+  static const String _keyAlertLostQueryEnabled = 'alert_lost_query_enabled';
+  static const String _keyAlertUrlChangeEnabled = 'alert_url_change_enabled';
+  static const String _keyAlertCannibalizationEnabled =
+      'alert_cannibalization_enabled';
+  static const String _keyAlertNotificationsEnabled =
+      'alert_notifications_enabled';
 
   // --- Safe Read & Write Helpers ---
 
@@ -299,6 +311,71 @@ class SecureStorageService {
     }
   }
 
+  // --- Alert Settings Persistence ---
+
+  Future<AlertSettings> getAlertSettings() async {
+    final gainThresh = await _safeRead(_keyAlertRankGainThreshold);
+    final dropThresh = await _safeRead(_keyAlertRankDropThreshold);
+    final gainEn = await _safeRead(_keyAlertRankGainEnabled);
+    final dropEn = await _safeRead(_keyAlertRankDropEnabled);
+    final newQEn = await _safeRead(_keyAlertNewQueryEnabled);
+    final lostQEn = await _safeRead(_keyAlertLostQueryEnabled);
+    final urlChEn = await _safeRead(_keyAlertUrlChangeEnabled);
+    final cannEn = await _safeRead(_keyAlertCannibalizationEnabled);
+    final notifEn = await _safeRead(_keyAlertNotificationsEnabled);
+
+    return AlertSettings(
+      rankGainThreshold: int.tryParse(gainThresh ?? '3') ?? 3,
+      rankDropThreshold: int.tryParse(dropThresh ?? '3') ?? 3,
+      rankGainEnabled: gainEn != 'false',
+      rankDropEnabled: dropEn != 'false',
+      newQueryEnabled: newQEn != 'false',
+      lostQueryEnabled: lostQEn != 'false',
+      urlChangeEnabled: urlChEn != 'false',
+      cannibalizationEnabled: cannEn != 'false',
+      localNotificationsEnabled: notifEn != 'false',
+    );
+  }
+
+  Future<void> saveAlertSettings(AlertSettings settings) async {
+    await _safeWrite(
+      _keyAlertRankGainThreshold,
+      settings.rankGainThreshold.toString(),
+    );
+    await _safeWrite(
+      _keyAlertRankDropThreshold,
+      settings.rankDropThreshold.toString(),
+    );
+    await _safeWrite(
+      _keyAlertRankGainEnabled,
+      settings.rankGainEnabled ? 'true' : 'false',
+    );
+    await _safeWrite(
+      _keyAlertRankDropEnabled,
+      settings.rankDropEnabled ? 'true' : 'false',
+    );
+    await _safeWrite(
+      _keyAlertNewQueryEnabled,
+      settings.newQueryEnabled ? 'true' : 'false',
+    );
+    await _safeWrite(
+      _keyAlertLostQueryEnabled,
+      settings.lostQueryEnabled ? 'true' : 'false',
+    );
+    await _safeWrite(
+      _keyAlertUrlChangeEnabled,
+      settings.urlChangeEnabled ? 'true' : 'false',
+    );
+    await _safeWrite(
+      _keyAlertCannibalizationEnabled,
+      settings.cannibalizationEnabled ? 'true' : 'false',
+    );
+    await _safeWrite(
+      _keyAlertNotificationsEnabled,
+      settings.localNotificationsEnabled ? 'true' : 'false',
+    );
+  }
+
   // --- Backup & Restore of Stored Credentials ---
 
   Future<Map<String, String>> getAllCredentials() async {
@@ -335,6 +412,16 @@ class SecureStorageService {
     if (autoMin != null) creds[_keyAutoSyncMinute] = autoMin;
     final dateWindow = await _safeRead(_keyAutoSyncDateWindowDays);
     if (dateWindow != null) creds[_keyAutoSyncDateWindowDays] = dateWindow;
+    final gainThresh = await _safeRead(_keyAlertRankGainThreshold);
+    if (gainThresh != null) creds[_keyAlertRankGainThreshold] = gainThresh;
+    final dropThresh = await _safeRead(_keyAlertRankDropThreshold);
+    if (dropThresh != null) creds[_keyAlertRankDropThreshold] = dropThresh;
+    final gainEn = await _safeRead(_keyAlertRankGainEnabled);
+    if (gainEn != null) creds[_keyAlertRankGainEnabled] = gainEn;
+    final dropEn = await _safeRead(_keyAlertRankDropEnabled);
+    if (dropEn != null) creds[_keyAlertRankDropEnabled] = dropEn;
+    final notifEn = await _safeRead(_keyAlertNotificationsEnabled);
+    if (notifEn != null) creds[_keyAlertNotificationsEnabled] = notifEn;
     return creds;
   }
 

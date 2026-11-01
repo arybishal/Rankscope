@@ -10,6 +10,7 @@ class Keyword {
   final String language; // e.g. 'en', 'es'
   final String device; // 'Desktop', 'Mobile'
   final List<String> tags;
+  final int? groupId;
   final bool isActive;
   final String? rankingUrl; // Currently observed ranking page URL
 
@@ -73,6 +74,7 @@ class Keyword {
     this.language = 'en',
     this.device = 'Desktop',
     this.tags = const [],
+    this.groupId,
     this.isActive = true,
     this.rankingUrl,
     this.googleAveragePosition,
@@ -291,6 +293,7 @@ class Keyword {
       language: map['language'] as String? ?? 'en',
       device: map['device'] as String? ?? 'Desktop',
       tags: parsedTags,
+      groupId: map['group_id'] as int?,
       isActive: (map['is_active'] as int? ?? 1) == 1,
       rankingUrl: map['ranking_url'] as String?,
       googleAveragePosition: (map['google_average_position'] as num?)
@@ -364,6 +367,7 @@ class Keyword {
       'language': language,
       'device': device,
       'tags': tags.isEmpty ? null : tags.join(','),
+      'group_id': groupId,
       'is_active': isActive ? 1 : 0,
       'ranking_url': rankingUrl,
       'google_average_position': googleAveragePosition,
@@ -417,6 +421,7 @@ class Keyword {
     String? language,
     String? device,
     List<String>? tags,
+    int? groupId,
     bool? isActive,
     String? rankingUrl,
     double? googleAveragePosition,
@@ -468,6 +473,7 @@ class Keyword {
       language: language ?? this.language,
       device: device ?? this.device,
       tags: tags ?? this.tags,
+      groupId: groupId ?? this.groupId,
       isActive: isActive ?? this.isActive,
       rankingUrl: rankingUrl ?? this.rankingUrl,
       googleAveragePosition:

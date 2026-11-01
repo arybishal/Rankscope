@@ -17,6 +17,8 @@ class LocalKeywordsDatasource {
     bool? isActive,
     String? searchEngine,
     String? tag,
+    int? groupId,
+    bool onlyUngrouped = false,
   }) async {
     final db = await _dbManager.database;
     final List<String> whereClauses = ['website_id = ?'];
@@ -35,6 +37,13 @@ class LocalKeywordsDatasource {
     if (tag != null && tag.isNotEmpty) {
       whereClauses.add('tags LIKE ?');
       whereArgs.add('%$tag%');
+    }
+
+    if (onlyUngrouped) {
+      whereClauses.add('group_id IS NULL');
+    } else if (groupId != null) {
+      whereClauses.add('group_id = ?');
+      whereArgs.add(groupId);
     }
 
     final results = await db.query(
@@ -160,6 +169,31 @@ class LocalKeywordsDatasource {
       where: 'id = ?',
       whereArgs: [keywordId],
     );
+  }
+
+  Future<void> updateKeywordGroup(int keywordId, int? groupId) async {
+    final db = await _dbManager.database;
+    await db.update(
+      DatabaseConstants.tableKeywords,
+      {'group_id': groupId},
+      where: 'id = ?',
+      whereArgs: [keywordId],
+    );
+  }
+
+  Future<void> assignKeywordsToGroup(List<int> keywordIds, int? groupId) async {
+    if (keywordIds.isEmpty) return;
+    final db = await _dbManager.database;
+    await db.transaction((txn) async {
+      for (final id in keywordIds) {
+        await txn.update(
+          DatabaseConstants.tableKeywords,
+          {'group_id': groupId},
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      }
+    });
   }
 
   Future<int> deleteKeyword(int id) async {

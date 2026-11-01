@@ -13,6 +13,8 @@ abstract class KeywordsRepository {
     bool? isActive,
     String? searchEngine,
     String? tag,
+    int? groupId,
+    bool onlyUngrouped = false,
   });
 
   Future<Keyword?> getKeywordById(int id);
@@ -35,6 +37,10 @@ abstract class KeywordsRepository {
   Future<void> updateKeyword(Keyword keyword);
 
   Future<void> toggleActiveStatus(int keywordId, bool isActive);
+
+  Future<void> updateKeywordGroup(int keywordId, int? groupId);
+
+  Future<void> assignKeywordsToGroup(List<int> keywordIds, int? groupId);
 
   Future<void> deleteKeyword(int id);
 

@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import '../../../../core/constants/database_constants.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/logging/app_logger.dart';
+import '../../../../core/notifications/local_notification_service.dart';
 import '../../../../core/security/secure_storage_service.dart';
 import '../../../../core/utils/url_validator.dart';
 import '../../../bing_webmaster/data/repositories/bing_repository_impl.dart';
@@ -14,6 +15,8 @@ import '../../../yandex_webmaster/data/repositories/yandex_repository_impl.dart'
 import '../../../yandex_webmaster/domain/repositories/yandex_repository.dart';
 import '../../domain/entities/keyword.dart';
 import '../../domain/entities/rank_observation.dart';
+import '../datasources/local_ranking_alerts_datasource.dart';
+import 'keyword_analysis_service.dart';
 
 /// Status of Search Performance Synchronization for Google, Bing, and Yandex.
 class SearchSyncResult {
@@ -608,6 +611,9 @@ class SearchPerformanceSyncService {
       );
     }
 
+    // Evaluate alerts according to user configured thresholds
+    await _processAlertsForWebsite(db: db, websiteId: websiteId, domain: domain);
+
     return SearchSyncResult(
       totalKeywords: keywords.length,
       matchedKeywords: matchedCount,
@@ -926,6 +932,74 @@ class SearchPerformanceSyncService {
         },
         where: 'id = ?',
         whereArgs: [id],
+      );
+    }
+  }
+
+  Future<void> _processAlertsForWebsite({
+    required Database db,
+    required int websiteId,
+    required String domain,
+  }) async {
+    try {
+      final alertSettings = await _secureStorage.getAlertSettings();
+      // Load current keywords
+      final kwRows = await db.query(
+        DatabaseConstants.tableKeywords,
+        where: 'website_id = ? AND is_active = 1',
+        whereArgs: [websiteId],
+      );
+      if (kwRows.isEmpty) return;
+      final keywords = kwRows.map((m) => Keyword.fromMap(m)).toList();
+
+      // Load recent observations for keywords
+      final Map<int, List<RankObservation>> obsByKeywordId = {};
+      for (final kw in keywords) {
+        if (kw.id == null) continue;
+        final obsRows = await db.query(
+          DatabaseConstants.tableRankObservations,
+          where: 'keyword_id = ?',
+          whereArgs: [kw.id!],
+          orderBy: 'recorded_at DESC',
+          limit: 10,
+        );
+        obsByKeywordId[kw.id!] =
+            obsRows.map((r) => RankObservation.fromMap(r)).toList();
+      }
+
+      final alerts = const KeywordAnalysisService().evaluateAlerts(
+        websiteId: websiteId,
+        keywords: keywords,
+        observationsByKeywordId: obsByKeywordId,
+        settings: alertSettings,
+      );
+
+      if (alerts.isNotEmpty) {
+        final alertDs = LocalRankingAlertsDatasource(dbManager: _dbManager);
+        await alertDs.insertAlertsBatch(alerts);
+
+        if (alertSettings.localNotificationsEnabled) {
+          final criticalOrWarning = alerts
+              .where((a) => a.isCritical || a.isWarning)
+              .toList();
+          if (criticalOrWarning.isNotEmpty) {
+            final firstAlert = criticalOrWarning.first;
+            final body = criticalOrWarning.length > 1
+                ? '${firstAlert.message} (+${criticalOrWarning.length - 1} more alerts)'
+                : firstAlert.message;
+            await LocalNotificationService.instance.showAlertNotification(
+              id: websiteId,
+              title: firstAlert.title,
+              body: body,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      await AppLogger.instance.warning(
+        'Alerts',
+        'evaluation_failed',
+        'Alerts evaluation failed for website #$websiteId: $e',
       );
     }
   }

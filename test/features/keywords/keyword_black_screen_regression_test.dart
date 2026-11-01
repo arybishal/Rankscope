@@ -32,6 +32,8 @@ class _InMemoryKeywordsRepository implements KeywordsRepository {
     bool? isActive,
     String? searchEngine,
     String? tag,
+    int? groupId,
+    bool onlyUngrouped = false,
   }) async {
     return _keywords.where((k) => k.websiteId == websiteId).toList();
   }
@@ -90,6 +92,19 @@ class _InMemoryKeywordsRepository implements KeywordsRepository {
   Future<void> toggleActiveStatus(int keywordId, bool isActive) async {
     final idx = _keywords.indexWhere((k) => k.id == keywordId);
     if (idx != -1) _keywords[idx] = _keywords[idx].copyWith(isActive: isActive);
+  }
+
+  @override
+  Future<void> updateKeywordGroup(int keywordId, int? groupId) async {
+    final idx = _keywords.indexWhere((k) => k.id == keywordId);
+    if (idx != -1) _keywords[idx] = _keywords[idx].copyWith(groupId: groupId);
+  }
+
+  @override
+  Future<void> assignKeywordsToGroup(List<int> keywordIds, int? groupId) async {
+    for (final id in keywordIds) {
+      await updateKeywordGroup(id, groupId);
+    }
   }
 
   @override
